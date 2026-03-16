@@ -308,14 +308,16 @@ export default function GymNote() {
                     return (
                       <button key={n} style={{...S.exPickRow,
                         background:already?"#1e3a5f":"#111827",
-                        borderColor:already?"#3b82f6":"#1e293b",
-                        opacity:already?0.6:1}}
+                        borderColor:already?"#3b82f6":"#1e293b"}}
                         onClick={()=>{
-                          if(already) return;
-                          setEditingMenu(p=>({...p,exercises:[...p.exercises,n]}));
+                          if(already){
+                            setEditingMenu(p=>({...p,exercises:p.exercises.filter(x=>x!==n)}));
+                          } else {
+                            setEditingMenu(p=>({...p,exercises:[...p.exercises,n]}));
+                          }
                         }}>
                         <span style={{color:already?"#93c5fd":"#cbd5e1"}}>{n}</span>
-                        <span style={{color:already?"#3b82f6":"#334155",fontSize:20,fontWeight:700}}>{already?"✓":"+"}</span>
+                        <span style={{color:already?"#ef4444":"#334155",fontSize:20,fontWeight:700}}>{already?"×":"+"}</span>
                       </button>
                     );
                   })}
