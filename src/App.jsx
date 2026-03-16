@@ -122,7 +122,17 @@ export default function GymNote() {
   };
 
   const updateEx = (exId, field, val) => {
-    setExercises(p=>p.map(e=>e.id===exId?{...e,[field]:field==="weight"?parseFloat(val)||0:parseInt(val)||0}:e));
+    setExercises(p=>p.map(e=>{
+      if(e.id!==exId) return e;
+      if(val===""||val==="-") return {...e,[field+"_raw"]:val};
+      const num = field==="weight"?parseFloat(val):parseInt(val);
+      if(isNaN(num)) return e;
+      return {...e,[field]:num,[field+"_raw"]:undefined};
+    }));
+  };
+  const exDisplayVal = (ex, field) => {
+    if(ex[field+"_raw"]!==undefined) return ex[field+"_raw"];
+    return ex[field];
   };
 
   const removeEx = (exId) => {
@@ -376,28 +386,34 @@ export default function GymNote() {
                   </div>
                 </div>
                 <div style={{...S.editors,marginBottom:4}}>
-                  {ex.weight>0&&(
-                    <div style={S.edGroup}>
-                      <div style={S.edLabel}>重量</div>
-                      <input style={S.edInput} type="number" value={ex.weight} onChange={e=>updateEx(ex.id,"weight",e.target.value)}/>
-                      <div style={S.edUnit}>kg</div>
-                    </div>
-                  )}
+                  <div style={S.edGroup}>
+                    <div style={S.edLabel}>重量</div>
+                    <input style={S.edInput} type="number" value={exDisplayVal(ex,"weight")}
+                      onChange={e=>updateEx(ex.id,"weight",e.target.value)}
+                      onBlur={e=>{ if(e.target.value===""||e.target.value==="-") setExercises(p=>p.map(v=>v.id===ex.id?{...v,weight:0,weight_raw:undefined}:v)); }}/>
+                    <div style={S.edUnit}>kg</div>
+                  </div>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>回数</div>
-                    <input style={S.edInput} type="number" value={ex.reps} onChange={e=>updateEx(ex.id,"reps",e.target.value)}/>
+                    <input style={S.edInput} type="number" value={exDisplayVal(ex,"reps")}
+                      onChange={e=>updateEx(ex.id,"reps",e.target.value)}
+                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,reps:1,reps_raw:undefined}:v)); }}/>
                     <div style={S.edUnit}>回</div>
                   </div>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>セット</div>
-                    <input style={S.edInput} type="number" value={ex.sets} onChange={e=>updateEx(ex.id,"sets",e.target.value)}/>
+                    <input style={S.edInput} type="number" value={exDisplayVal(ex,"sets")}
+                      onChange={e=>updateEx(ex.id,"sets",e.target.value)}
+                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,sets:0,sets_raw:undefined}:v)); }}/>
                     <div style={S.edUnit}>set</div>
                   </div>
                 </div>
                 <div style={{...S.editors,marginTop:0}}>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>REST</div>
-                    <input style={{...S.edInput,width:56}} type="number" value={ex.rest} onChange={e=>updateEx(ex.id,"rest",e.target.value)}/>
+                    <input style={{...S.edInput,width:56}} type="number" value={exDisplayVal(ex,"rest")}
+                      onChange={e=>updateEx(ex.id,"rest",e.target.value)}
+                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,rest:0,rest_raw:undefined}:v)); }}/>
                     <div style={S.edUnit}>秒</div>
                   </div>
                 </div>
