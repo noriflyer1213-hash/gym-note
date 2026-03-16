@@ -375,7 +375,7 @@ export default function GymNote() {
                       onClick={()=>removeEx(ex.id)}>×</button>
                   </div>
                 </div>
-                <div style={S.editors}>
+                <div style={{...S.editors,marginBottom:4}}>
                   {ex.weight>0&&(
                     <div style={S.edGroup}>
                       <div style={S.edLabel}>重量</div>
@@ -393,10 +393,12 @@ export default function GymNote() {
                     <input style={S.edInput} type="number" value={ex.sets} onChange={e=>updateEx(ex.id,"sets",e.target.value)}/>
                     <div style={S.edUnit}>set</div>
                   </div>
+                </div>
+                <div style={{...S.editors,marginTop:0}}>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>REST</div>
-                    <input style={S.edInput} type="number" value={ex.rest} onChange={e=>updateEx(ex.id,"rest",e.target.value)}/>
-                    <div style={S.edUnit}>s</div>
+                    <input style={{...S.edInput,width:56}} type="number" value={ex.rest} onChange={e=>updateEx(ex.id,"rest",e.target.value)}/>
+                    <div style={S.edUnit}>秒</div>
                   </div>
                 </div>
                 <div style={S.setRow}>
