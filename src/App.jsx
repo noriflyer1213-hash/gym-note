@@ -47,16 +47,16 @@ export default function GymNote() {
   const [history, setHistory] = useState([]);
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [menuName, setMenuName] = useState("");
+  const [menuId, setMenuId] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [checkedSets, setCheckedSets] = useState({});
   const [startMs, setStartMs] = useState(null);
   const [elapsedStr, setElapsedStr] = useState("");
   const [restTimer, setRestTimer] = useState(null);
-  // editor state
-  const [editingMenu, setEditingMenu] = useState(null); // {id, name, exercises:[]}
-  const [editTab, setEditTab] = useState("exercises"); // "exercises" | "add"
-  const [dragIdx, setDragIdx] = useState(null);
+  const [showAddEx, setShowAddEx] = useState(false);
+  const [exDragIdx, setExDragIdx] = useState(null);
   const [menuDragIdx, setMenuDragIdx] = useState(null);
+  const [editingMenu, setEditingMenu] = useState(null);
   const restRef = useRef(null);
   const elapsedRef = useRef(null);
 
@@ -88,14 +88,15 @@ export default function GymNote() {
     return () => clearInterval(elapsedRef.current);
   }, [view, startMs]);
 
-  const launchWorkout = (name, exNames) => {
+  const launchWorkout = (name, exNames, mid) => {
     const exs = exNames.map((n,i) => {
       const m = MASTER_EXERCISES.find(e=>e.name===n)||{name:n,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
-      return {...m, id:i, weight:m.defaultWeight, reps:m.defaultReps, sets:m.defaultSets};
+      return {...m, id:genId(), weight:m.defaultWeight, reps:m.defaultReps, sets:m.defaultSets};
     });
-    setMenuName(name); setExercises(exs); setCheckedSets({});
+    setMenuName(name); setMenuId(mid||null);
+    setExercises(exs); setCheckedSets({});
     setStartMs(Date.now()); setRestTimer(null); setElapsedStr("0分0秒");
-    setView("workout");
+    setShowAddEx(false); setView("workout");
   };
 
   const startRest = (sec, name) => {
@@ -120,7 +121,33 @@ export default function GymNote() {
   };
 
   const updateEx = (exId, field, val) => {
-    setExercises(p=>p.map(e=>e.id===exId?{...e,[field]:field==="weight"?parseFloat(val)||0:parseInt(val)||1}:e));
+    setExercises(p=>p.map(e=>e.id===exId?{...e,[field]:field==="weight"?parseFloat(val)||0:parseInt(val)||0}:e));
+  };
+
+  const removeEx = (exId) => {
+    setExercises(p=>p.filter(e=>e.id!==exId));
+    setCheckedSets(p=>{
+      const n={};
+      Object.entries(p).forEach(([k,v])=>{ if(!k.startsWith(exId+"-")) n[k]=v; });
+      return n;
+    });
+  };
+
+  const addExToWorkout = (name) => {
+    const m = MASTER_EXERCISES.find(e=>e.name===name)||{name,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
+    setExercises(p=>[...p, {...m, id:genId(), weight:m.defaultWeight, reps:m.defaultReps, sets:m.defaultSets}]);
+  };
+
+  // drag in workout
+  const onExDragStart = (i) => setExDragIdx(i);
+  const onExDragOver = (e, i) => {
+    e.preventDefault();
+    if (exDragIdx===null||exDragIdx===i) return;
+    const exs = [...exercises];
+    const [removed] = exs.splice(exDragIdx, 1);
+    exs.splice(i, 0, removed);
+    setExercises(exs);
+    setExDragIdx(i);
   };
 
   const finishWorkout = () => {
@@ -138,64 +165,46 @@ export default function GymNote() {
     setView("home");
   };
 
+  const saveToMenu = () => {
+    if (!menuId) return;
+    const newMenus = menus.map(m => m.id===menuId
+      ? {...m, exercises: exercises.map(e=>e.name)}
+      : m
+    );
+    save(newMenus, null);
+    alert("メニューに保存しました！");
+  };
+
   const totalSets=exercises.reduce((s,e)=>s+e.sets,0);
   const doneSets=Object.values(checkedSets).filter(Boolean).length;
 
-  // ── メニュー編集画面 ──
+  // menu editor
   const openEditor = (menu) => {
     setEditingMenu({...menu, exercises:[...menu.exercises]});
-    setEditTab("exercises");
     setView("editor");
   };
-
   const saveEditor = () => {
     const newMenus = menus.map(m => m.id===editingMenu.id ? editingMenu : m);
-    save(newMenus, null);
-    setView("home");
+    save(newMenus, null); setView("home");
   };
-
   const copyMenu = (menu) => {
-    const newMenu = { id: genId(), name: menu.name+"（コピー）", exercises:[...menu.exercises] };
-    const newMenus = [...menus, newMenu];
-    save(newMenus, null);
+    save([...menus, {id:genId(), name:menu.name+"（コピー）", exercises:[...menu.exercises]}], null);
   };
-
   const deleteMenu = (id) => {
     if (!window.confirm("このメニューを削除しますか？")) return;
     save(menus.filter(m=>m.id!==id), null);
   };
-
   const addNewMenu = () => {
-    const newMenu = { id: genId(), name: "新しいメニュー", exercises:[] };
-    const newMenus = [...menus, newMenu];
-    save(newMenus, null);
-    setEditingMenu({...newMenu});
-    setEditTab("exercises");
-    setView("editor");
+    const nm = {id:genId(), name:"新しいメニュー", exercises:[]};
+    save([...menus, nm], null);
+    setEditingMenu({...nm}); setView("editor");
   };
-
-  // drag & drop for exercises in editor
-  const onExDragStart = (i) => setDragIdx(i);
-  const onExDragOver = (e, i) => {
-    e.preventDefault();
-    if (dragIdx===null||dragIdx===i) return;
-    const exs = [...editingMenu.exercises];
-    const [removed] = exs.splice(dragIdx, 1);
-    exs.splice(i, 0, removed);
-    setEditingMenu(p=>({...p, exercises:exs}));
-    setDragIdx(i);
-  };
-
-  // drag & drop for menus on home
   const onMenuDragStart = (i) => setMenuDragIdx(i);
   const onMenuDragOver = (e, i) => {
     e.preventDefault();
     if (menuDragIdx===null||menuDragIdx===i) return;
-    const m = [...menus];
-    const [removed] = m.splice(menuDragIdx, 1);
-    m.splice(i, 0, removed);
-    save(m, null);
-    setMenuDragIdx(i);
+    const m=[...menus]; const [r]=m.splice(menuDragIdx,1); m.splice(i,0,r);
+    save(m,null); setMenuDragIdx(i);
   };
 
   // ── HOME ──
@@ -213,23 +222,21 @@ export default function GymNote() {
               onDragStart={()=>onMenuDragStart(i)}
               onDragOver={e=>onMenuDragOver(e,i)}
               onDragEnd={()=>setMenuDragIdx(null)}
-              style={{...S.menuCard, cursor:"grab", marginBottom:8}}>
+              style={{...S.menuCard, marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <button style={{...S.menuCardInner}} onClick={()=>launchWorkout(menu.name, menu.exercises)}>
+                <button style={S.menuCardInner} onClick={()=>launchWorkout(menu.name, menu.exercises, menu.id)}>
                   <div style={S.menuCardName}>{menu.name}</div>
                   <div style={S.menuCardMeta}>{menu.exercises.length}種目 · タップしてスタート →</div>
                 </button>
                 <div style={{display:"flex",gap:4,flexShrink:0,paddingLeft:8}}>
-                  <button style={S.iconBtn} onClick={()=>openEditor(menu)} title="編集">✏️</button>
-                  <button style={S.iconBtn} onClick={()=>copyMenu(menu)} title="コピー">📋</button>
-                  <button style={{...S.iconBtn,color:"#ef4444"}} onClick={()=>deleteMenu(menu.id)} title="削除">🗑</button>
+                  <button style={S.iconBtn} onClick={()=>openEditor(menu)}>✏️</button>
+                  <button style={S.iconBtn} onClick={()=>copyMenu(menu)}>📋</button>
+                  <button style={{...S.iconBtn}} onClick={()=>deleteMenu(menu.id)}>🗑</button>
                 </div>
               </div>
             </div>
           ))}
-          <button style={S.buildCard} onClick={addNewMenu}>
-            ＋ 新しいメニューを作る
-          </button>
+          <button style={S.buildCard} onClick={addNewMenu}>＋ 新しいメニューを作る</button>
         </div>
         <div style={S.section}>
           <div style={S.sectionTitle}>最近の記録</div>
@@ -254,35 +261,35 @@ export default function GymNote() {
   if (view==="editor"&&editingMenu) {
     const grouped={};
     MASTER_EXERCISES.forEach(e=>{if(!grouped[e.muscle])grouped[e.muscle]=[];grouped[e.muscle].push(e.name);});
+    const [edTab, setEdTab] = useState("list");
     return (
       <div style={S.app}>
         <div style={S.header}>
           <button style={S.backBtn} onClick={()=>setView("home")}>←</button>
           <div style={{flex:1}}>
-            <input style={{...S.nameInputInline}} value={editingMenu.name}
+            <input style={S.nameInputInline} value={editingMenu.name}
               onChange={e=>setEditingMenu(p=>({...p,name:e.target.value}))}/>
             <div style={S.headerSub}>{editingMenu.exercises.length}種目</div>
           </div>
           <button style={S.finishBtn} onClick={saveEditor}>保存</button>
         </div>
-        {/* タブ */}
         <div style={{display:"flex",borderBottom:"1px solid #1e293b"}}>
-          <button style={{...S.tab, ...(editTab==="exercises"?S.tabActive:{})}} onClick={()=>setEditTab("exercises")}>種目一覧</button>
-          <button style={{...S.tab, ...(editTab==="add"?S.tabActive:{})}} onClick={()=>setEditTab("add")}>種目を追加</button>
+          <button style={{...S.tab,...(edTab==="list"?S.tabActive:{})}} onClick={()=>setEdTab("list")}>種目一覧</button>
+          <button style={{...S.tab,...(edTab==="add"?S.tabActive:{})}} onClick={()=>setEdTab("add")}>種目を追加</button>
         </div>
         <div style={S.scroll}>
-          {editTab==="exercises" && (
+          {edTab==="list" && (
             <>
-              {editingMenu.exercises.length===0 && <div style={S.empty}>種目がありません。「種目を追加」から追加してください。</div>}
-              {editingMenu.exercises.map((name, i) => {
-                const m = MASTER_EXERCISES.find(e=>e.name===name);
-                const mc = MUSCLE_COLORS[m?.muscle]||"#94a3b8";
-                return (
+              {editingMenu.exercises.length===0&&<div style={S.empty}>「種目を追加」から追加してください。</div>}
+              {editingMenu.exercises.map((name,i)=>{
+                const m=MASTER_EXERCISES.find(e=>e.name===name);
+                const mc=MUSCLE_COLORS[m?.muscle]||"#94a3b8";
+                return(
                   <div key={i} draggable
-                    onDragStart={()=>onExDragStart(i)}
-                    onDragOver={e=>onExDragOver(e,i)}
-                    onDragEnd={()=>setDragIdx(null)}
-                    style={{...S.exEditRow, borderLeftColor:mc}}>
+                    onDragStart={()=>setExDragIdx(i)}
+                    onDragOver={e=>{e.preventDefault();if(exDragIdx===null||exDragIdx===i)return;const exs=[...editingMenu.exercises];const[r]=exs.splice(exDragIdx,1);exs.splice(i,0,r);setEditingMenu(p=>({...p,exercises:exs}));setExDragIdx(i);}}
+                    onDragEnd={()=>setExDragIdx(null)}
+                    style={{...S.exEditRow,borderLeftColor:mc}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
                       <span style={{color:"#475569",fontSize:18,cursor:"grab"}}>☰</span>
                       <div>
@@ -295,112 +302,145 @@ export default function GymNote() {
                   </div>
                 );
               })}
-              <div style={{height:40}}/>
             </>
           )}
-          {editTab==="add" && (
-            <>
-              {Object.entries(grouped).map(([muscle,names])=>(
-                <div key={muscle}>
-                  <div style={{...S.muscleLabel,color:MUSCLE_COLORS[muscle]||"#94a3b8"}}>{muscle}</div>
-                  {names.map(n=>{
-                    const already = editingMenu.exercises.includes(n);
-                    return (
-                      <button key={n} style={{...S.exPickRow,
-                        background:already?"#1e3a5f":"#111827",
-                        borderColor:already?"#3b82f6":"#1e293b"}}
-                        onClick={()=>{
-                          if(already){
-                            setEditingMenu(p=>({...p,exercises:p.exercises.filter(x=>x!==n)}));
-                          } else {
-                            setEditingMenu(p=>({...p,exercises:[...p.exercises,n]}));
-                          }
-                        }}>
-                        <span style={{color:already?"#93c5fd":"#cbd5e1"}}>{n}</span>
-                        <span style={{color:already?"#ef4444":"#334155",fontSize:20,fontWeight:700}}>{already?"×":"+"}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-              <div style={{height:40}}/>
-            </>
-          )}
+          {edTab==="add" && Object.entries(grouped).map(([muscle,names])=>(
+            <div key={muscle}>
+              <div style={{...S.muscleLabel,color:MUSCLE_COLORS[muscle]||"#94a3b8"}}>{muscle}</div>
+              {names.map(n=>{
+                const already=editingMenu.exercises.includes(n);
+                return(
+                  <button key={n} style={{...S.exPickRow,background:already?"#1e3a5f":"#111827",borderColor:already?"#3b82f6":"#1e293b"}}
+                    onClick={()=>setEditingMenu(p=>({...p,exercises:already?p.exercises.filter(x=>x!==n):[...p.exercises,n]}))}>
+                    <span style={{color:already?"#93c5fd":"#cbd5e1"}}>{n}</span>
+                    <span style={{color:already?"#ef4444":"#334155",fontSize:20,fontWeight:700}}>{already?"×":"+"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          <div style={{height:40}}/>
         </div>
       </div>
     );
   }
 
   // ── WORKOUT ──
-  if (view==="workout") return(
-    <div style={S.app}>
-      <div style={S.header}>
-        <button style={S.backBtn} onClick={()=>{if(window.confirm("終了して破棄しますか？")){stopRest();clearInterval(elapsedRef.current);setView("home");}}}>←</button>
-        <div style={{flex:1}}>
-          <div style={S.headerTitle}>{menuName}</div>
-          <div style={S.headerSub}>{doneSets}/{totalSets}セット完了 · {elapsedStr}</div>
+  if (view==="workout") {
+    const grouped={};
+    MASTER_EXERCISES.forEach(e=>{if(!grouped[e.muscle])grouped[e.muscle]=[];grouped[e.muscle].push(e.name);});
+    return(
+      <div style={S.app}>
+        <div style={S.header}>
+          <button style={S.backBtn} onClick={()=>{if(window.confirm("終了して破棄しますか？")){stopRest();clearInterval(elapsedRef.current);setView("home");}}}>←</button>
+          <div style={{flex:1}}>
+            <div style={S.headerTitle}>{menuName}</div>
+            <div style={S.headerSub}>{doneSets}/{totalSets}セット · {elapsedStr}</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {menuId&&<button style={{...S.iconBtn,background:"#1e3a5f"}} onClick={saveToMenu} title="メニューに保存">💾</button>}
+            <button style={S.finishBtn} onClick={finishWorkout}>保存</button>
+          </div>
         </div>
-        <button style={S.finishBtn} onClick={finishWorkout}>保存</button>
-      </div>
-      <div style={S.progTrack}><div style={{...S.progBar,width:`${totalSets>0?doneSets/totalSets*100:0}%`}}/></div>
-      {restTimer&&(
-        <div style={S.timerBox}>
-          <div style={S.timerName}>{restTimer.name} · レスト中</div>
-          <div style={S.timerNum}>{formatTime(restTimer.rem)}</div>
-          <div style={S.timerTrack}><div style={{...S.timerFill,width:`${(1-restTimer.rem/restTimer.total)*100}%`}}/></div>
-          <button style={S.timerSkip} onClick={stopRest}>スキップ ×</button>
-        </div>
-      )}
-      <div style={S.scroll}>
-        {exercises.map(ex=>{
-          const allDone=Array.from({length:ex.sets},(_,i)=>!!checkedSets[`${ex.id}-${i}`]).every(Boolean);
-          const mc=MUSCLE_COLORS[ex.muscle]||"#94a3b8";
-          return(
-            <div key={ex.id} style={{...S.card,opacity:allDone?0.5:1,borderLeftColor:mc}}>
-              <div style={S.cardTop}>
-                <div>
-                  <div style={{...S.muscleBadge,color:mc,borderColor:mc}}>{ex.muscle}</div>
-                  <div style={S.exName}>{ex.name}</div>
-                </div>
-                <div style={S.restTag}>{ex.rest>0?`REST ${ex.rest}s`:"-"}</div>
-              </div>
-              <div style={S.editors}>
-                {ex.weight>0&&(
-                  <div style={S.edGroup}>
-                    <div style={S.edLabel}>重量</div>
-                    <input style={S.edInput} type="number" value={ex.weight} onChange={e=>updateEx(ex.id,"weight",e.target.value)}/>
-                    <div style={S.edUnit}>kg</div>
+        <div style={S.progTrack}><div style={{...S.progBar,width:`${totalSets>0?doneSets/totalSets*100:0}%`}}/></div>
+        {restTimer&&(
+          <div style={S.timerBox}>
+            <div style={S.timerName}>{restTimer.name} · レスト中</div>
+            <div style={S.timerNum}>{formatTime(restTimer.rem)}</div>
+            <div style={S.timerTrack}><div style={{...S.timerFill,width:`${(1-restTimer.rem/restTimer.total)*100}%`}}/></div>
+            <button style={S.timerSkip} onClick={stopRest}>スキップ ×</button>
+          </div>
+        )}
+        <div style={S.scroll}>
+          {exercises.map((ex,idx)=>{
+            const allDone=Array.from({length:ex.sets},(_,i)=>!!checkedSets[`${ex.id}-${i}`]).every(Boolean);
+            const mc=MUSCLE_COLORS[ex.muscle]||"#94a3b8";
+            return(
+              <div key={ex.id} draggable
+                onDragStart={()=>onExDragStart(idx)}
+                onDragOver={e=>onExDragOver(e,idx)}
+                onDragEnd={()=>setExDragIdx(null)}
+                style={{...S.card,opacity:allDone?0.5:1,borderLeftColor:mc}}>
+                <div style={S.cardTop}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                    <span style={{color:"#334155",fontSize:16,cursor:"grab",marginTop:2}}>☰</span>
+                    <div>
+                      <div style={{...S.muscleBadge,color:mc,borderColor:mc}}>{ex.muscle}</div>
+                      <div style={S.exName}>{ex.name}</div>
+                    </div>
                   </div>
-                )}
-                <div style={S.edGroup}>
-                  <div style={S.edLabel}>回数</div>
-                  <input style={S.edInput} type="number" value={ex.reps} onChange={e=>updateEx(ex.id,"reps",e.target.value)}/>
-                  <div style={S.edUnit}>回</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={S.restTag}>{ex.rest>0?`REST ${ex.rest}s`:"-"}</div>
+                    <button style={{background:"none",border:"none",color:"#475569",fontSize:18,cursor:"pointer",padding:"0 2px"}}
+                      onClick={()=>removeEx(ex.id)}>×</button>
+                  </div>
                 </div>
-                <div style={S.edGroup}>
-                  <div style={S.edLabel}>セット</div>
-                  <input style={S.edInput} type="number" value={ex.sets} onChange={e=>updateEx(ex.id,"sets",e.target.value)}/>
-                  <div style={S.edUnit}>set</div>
+                <div style={S.editors}>
+                  {ex.weight>0&&(
+                    <div style={S.edGroup}>
+                      <div style={S.edLabel}>重量</div>
+                      <input style={S.edInput} type="number" value={ex.weight} onChange={e=>updateEx(ex.id,"weight",e.target.value)}/>
+                      <div style={S.edUnit}>kg</div>
+                    </div>
+                  )}
+                  <div style={S.edGroup}>
+                    <div style={S.edLabel}>回数</div>
+                    <input style={S.edInput} type="number" value={ex.reps} onChange={e=>updateEx(ex.id,"reps",e.target.value)}/>
+                    <div style={S.edUnit}>回</div>
+                  </div>
+                  <div style={S.edGroup}>
+                    <div style={S.edLabel}>セット</div>
+                    <input style={S.edInput} type="number" value={ex.sets} onChange={e=>updateEx(ex.id,"sets",e.target.value)}/>
+                    <div style={S.edUnit}>set</div>
+                  </div>
+                  <div style={S.edGroup}>
+                    <div style={S.edLabel}>REST</div>
+                    <input style={S.edInput} type="number" value={ex.rest} onChange={e=>updateEx(ex.id,"rest",e.target.value)}/>
+                    <div style={S.edUnit}>s</div>
+                  </div>
+                </div>
+                <div style={S.setRow}>
+                  {ex.sets > 0 && Array.from({length:ex.sets},(_,i)=>{
+                    const done=!!checkedSets[`${ex.id}-${i}`];
+                    return(
+                      <button key={i} style={{...S.setBtn,...(done?{background:mc,color:"#000",borderColor:mc}:{})}}
+                        onClick={()=>toggleSet(ex.id,i)}>
+                        {done?"✓":i+1}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div style={S.setRow}>
-                {Array.from({length:ex.sets},(_,i)=>{
-                  const done=!!checkedSets[`${ex.id}-${i}`];
-                  return(
-                    <button key={i} style={{...S.setBtn,...(done?{background:mc,color:"#000",borderColor:mc}:{})}}
-                      onClick={()=>toggleSet(ex.id,i)}>
-                      {done?"✓":i+1}
-                    </button>
-                  );
-                })}
-              </div>
+            );
+          })}
+
+          {/* 種目追加ボタン */}
+          <div style={{padding:"8px 12px"}}>
+            <button style={{...S.buildCard,marginTop:0}} onClick={()=>setShowAddEx(p=>!p)}>
+              {showAddEx?"▲ 閉じる":"＋ 種目を追加"}
+            </button>
+          </div>
+
+          {showAddEx && Object.entries(grouped).map(([muscle,names])=>(
+            <div key={muscle}>
+              <div style={{...S.muscleLabel,color:MUSCLE_COLORS[muscle]||"#94a3b8"}}>{muscle}</div>
+              {names.map(n=>{
+                const already=exercises.some(e=>e.name===n);
+                return(
+                  <button key={n} style={{...S.exPickRow,background:already?"#1a2a1a":"#111827",borderColor:already?"#334155":"#1e293b"}}
+                    onClick={()=>{ if(!already) { addExToWorkout(n); } }}>
+                    <span style={{color:already?"#4ade80":"#cbd5e1"}}>{n}</span>
+                    <span style={{color:already?"#4ade80":"#334155",fontSize:16}}>{already?"✓":"+"}</span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
-        <div style={{height:60}}/>
+          ))}
+          <div style={{height:60}}/>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // ── HISTORY ──
   if(view==="history") return(
