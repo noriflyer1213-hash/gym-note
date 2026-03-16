@@ -50,7 +50,7 @@ export default function GymNote() {
   const [menuId, setMenuId] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [checkedSets, setCheckedSets] = useState({});
-  const [setOverrides, setSetOverrides] = useState({}); // {exId-si: {weight, reps}}
+  const [setOverrides, setSetOverrides] = useState({});
   const [startMs, setStartMs] = useState(null);
   const [elapsedStr, setElapsedStr] = useState("");
   const [restTimer, setRestTimer] = useState(null);
@@ -59,160 +59,212 @@ export default function GymNote() {
   const [menuDragIdx, setMenuDragIdx] = useState(null);
   const [editingMenu, setEditingMenu] = useState(null);
   const [edTab, setEdTab] = useState("list");
-  // セット個別編集モーダル
-  const [setModal, setSetModal] = useState(null); // {exId, si, weight, reps}
+  const [setModal, setSetModal] = useState(null);
+  // レスト前確認モーダル: {exId, si, weight, reps, exName, muscle, editing}
+  const [nextSetModal, setNextSetModal] = useState(null);
   const restRef = useRef(null);
   const elapsedRef = useRef(null);
-  const longPressRef = useRef(null);
+  const nextSetShownRef = useRef(false); // 同レストで2回出ないように
 
   useEffect(() => {
     try {
       const s = localStorage.getItem("gym_v4");
-      if (s) {
-        const d = JSON.parse(s);
-        if (d.menus) setMenus(d.menus);
-        if (d.history) setHistory(d.history);
-      }
+      if (s) { const d=JSON.parse(s); if(d.menus)setMenus(d.menus); if(d.history)setHistory(d.history); }
     } catch{}
   }, []);
 
   const save = (newMenus, newHistory) => {
-    const m = newMenus ?? menus;
-    const h = newHistory ?? history;
+    const m=newMenus??menus, h=newHistory??history;
     setMenus(m); setHistory(h);
-    try { localStorage.setItem("gym_v4", JSON.stringify({menus:m, history:h})); } catch{}
+    try { localStorage.setItem("gym_v4", JSON.stringify({menus:m,history:h})); } catch{}
   };
 
   useEffect(() => {
-    if (view === "workout" && startMs) {
-      elapsedRef.current = setInterval(() => {
-        const s = Math.floor((Date.now()-startMs)/1000);
+    if (view==="workout"&&startMs) {
+      elapsedRef.current = setInterval(()=>{
+        const s=Math.floor((Date.now()-startMs)/1000);
         setElapsedStr(`${Math.floor(s/60)}分${s%60}秒`);
-      }, 1000);
+      },1000);
     }
-    return () => clearInterval(elapsedRef.current);
-  }, [view, startMs]);
+    return ()=>clearInterval(elapsedRef.current);
+  },[view,startMs]);
 
   const launchWorkout = (name, exNames, mid) => {
-    const exs = exNames.map(n => {
-      const m = MASTER_EXERCISES.find(e=>e.name===n)||{name:n,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
-      return {...m, id:genId(), weight:m.defaultWeight, reps:m.defaultReps, sets:m.defaultSets};
+    const exs = exNames.map(n=>{
+      const m=MASTER_EXERCISES.find(e=>e.name===n)||{name:n,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
+      return {...m,id:genId(),weight:m.defaultWeight,reps:m.defaultReps,sets:m.defaultSets};
     });
     setMenuName(name); setMenuId(mid||null);
     setExercises(exs); setCheckedSets({}); setSetOverrides({});
     setStartMs(Date.now()); setRestTimer(null); setElapsedStr("0分0秒");
-    setShowAddEx(false); setView("workout");
+    setShowAddEx(false); setNextSetModal(null); setView("workout");
   };
 
-  const startRest = (sec, name) => {
+  const getSetVal = (ex, si) => {
+    const ov=setOverrides[`${ex.id}-${si}`];
+    return {weight:ov?.weight??ex.weight, reps:ov?.reps??ex.reps};
+  };
+
+  // 次の未完了セットを探す
+  const findNextSet = (completedExId, completedSi) => {
+    for (const ex of exercises) {
+      for (let i=0; i<ex.sets; i++) {
+        if (ex.id===completedExId && i===completedSi) continue;
+        if (!checkedSets[`${ex.id}-${i}`]) {
+          return {ex, si:i};
+        }
+      }
+    }
+    return null;
+  };
+
+  const startRest = (sec, name, completedExId, completedSi) => {
     clearInterval(restRef.current);
-    setRestTimer({rem:sec, total:sec, name});
-    restRef.current = setInterval(() => {
-      setRestTimer(p => {
-        if(!p||p.rem<=1){clearInterval(restRef.current);return null;}
-        return {...p, rem:p.rem-1};
+    nextSetShownRef.current = false;
+    setRestTimer({rem:sec, total:sec, name, completedExId, completedSi});
+    restRef.current = setInterval(()=>{
+      setRestTimer(p=>{
+        if(!p||p.rem<=1){clearInterval(restRef.current); return null;}
+        // 20秒前に次セット確認モーダルを表示
+        if(p.rem===20&&!nextSetShownRef.current){
+          nextSetShownRef.current=true;
+          setExercises(currentExs=>{
+            setCheckedSets(currentChecked=>{
+              setSetOverrides(currentOv=>{
+                // 次の未完了セットを探す
+                let found=null;
+                for(const ex of currentExs){
+                  for(let i=0;i<ex.sets;i++){
+                    if(!(ex.id===p.completedExId&&i===p.completedSi)&&!currentChecked[`${ex.id}-${i}`]){
+                      found={ex,si:i}; break;
+                    }
+                  }
+                  if(found)break;
+                }
+                if(found){
+                  const ov=currentOv[`${found.ex.id}-${found.si}`];
+                  const w=ov?.weight??found.ex.weight;
+                  const r=ov?.reps??found.ex.reps;
+                  setNextSetModal({exId:found.ex.id,si:found.si,weight:w,reps:r,exName:found.ex.name,muscle:found.ex.muscle,editing:false});
+                }
+                return currentOv;
+              });
+              return currentChecked;
+            });
+            return currentExs;
+          });
+        }
+        return {...p,rem:p.rem-1};
       });
     },1000);
   };
 
   const stopRest = () => { clearInterval(restRef.current); setRestTimer(null); };
 
-  // セットの実際の重量・回数を取得
-  const getSetVal = (ex, si) => {
-    const ov = setOverrides[`${ex.id}-${si}`];
-    return { weight: ov?.weight ?? ex.weight, reps: ov?.reps ?? ex.reps };
-  };
-
   const toggleSet = (exId, si) => {
     const key=`${exId}-${si}`;
     const wasDone=!!checkedSets[key];
     setCheckedSets(p=>({...p,[key]:!wasDone}));
-    if(!wasDone){const ex=exercises.find(e=>e.id===exId); if(ex&&ex.rest>0) startRest(ex.rest,ex.name);}
-    else stopRest();
-  };
-
-  // ダブルタップ検出
-  const lastTapRef = useRef({});
-  const onSetTap = (ex, si) => {
-    const key = `${ex.id}-${si}`;
-    const now = Date.now();
-    if (lastTapRef.current[key] && now - lastTapRef.current[key] < 350) {
-      // ダブルタップ
-      lastTapRef.current[key] = 0;
-      const {weight, reps} = getSetVal(ex, si);
-      setSetModal({exId:ex.id, si, weight, reps, exName:ex.name, muscle:ex.muscle});
-    } else {
-      lastTapRef.current[key] = now;
-      toggleSet(ex.id, si);
-    }
+    if(!wasDone){
+      const ex=exercises.find(e=>e.id===exId);
+      if(ex&&ex.rest>0) startRest(ex.rest,ex.name,exId,si);
+    } else stopRest();
   };
 
   const updateEx = (exId, field, val) => {
     setExercises(p=>p.map(e=>{
-      if(e.id!==exId) return e;
-      if(val===""||val==="-") return {...e,[field+"_raw"]:val};
-      const num = field==="weight"?parseFloat(val):parseInt(val);
-      if(isNaN(num)) return e;
+      if(e.id!==exId)return e;
+      if(val===""||val==="-")return {...e,[field+"_raw"]:val};
+      const num=field==="weight"?parseFloat(val):parseInt(val);
+      if(isNaN(num))return e;
       return {...e,[field]:num,[field+"_raw"]:undefined};
     }));
   };
-  const exDisplayVal = (ex, field) => ex[field+"_raw"]!==undefined ? ex[field+"_raw"] : ex[field];
+  const exDisplayVal=(ex,field)=>ex[field+"_raw"]!==undefined?ex[field+"_raw"]:ex[field];
 
   const removeEx = (exId) => {
     setExercises(p=>p.filter(e=>e.id!==exId));
-    setCheckedSets(p=>{ const n={}; Object.entries(p).forEach(([k,v])=>{ if(!k.startsWith(exId+"-")) n[k]=v; }); return n; });
-    setSetOverrides(p=>{ const n={}; Object.entries(p).forEach(([k,v])=>{ if(!k.startsWith(exId+"-")) n[k]=v; }); return n; });
+    setCheckedSets(p=>{const n={};Object.entries(p).forEach(([k,v])=>{if(!k.startsWith(exId+"-"))n[k]=v;});return n;});
+    setSetOverrides(p=>{const n={};Object.entries(p).forEach(([k,v])=>{if(!k.startsWith(exId+"-"))n[k]=v;});return n;});
   };
 
   const addExToWorkout = (name) => {
-    const m = MASTER_EXERCISES.find(e=>e.name===name)||{name,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
-    setExercises(p=>[...p, {...m, id:genId(), weight:m.defaultWeight, reps:m.defaultReps, sets:m.defaultSets}]);
+    const m=MASTER_EXERCISES.find(e=>e.name===name)||{name,defaultWeight:0,defaultReps:10,defaultSets:3,rest:120,muscle:"その他"};
+    setExercises(p=>[...p,{...m,id:genId(),weight:m.defaultWeight,reps:m.defaultReps,sets:m.defaultSets}]);
   };
 
-  const onExDragStart = (i) => setExDragIdx(i);
-  const onExDragOver = (e, i) => {
+  const onExDragStart=(i)=>setExDragIdx(i);
+  const onExDragOver=(e,i)=>{
     e.preventDefault();
-    if (exDragIdx===null||exDragIdx===i) return;
-    const exs=[...exercises]; const [r]=exs.splice(exDragIdx,1); exs.splice(i,0,r);
-    setExercises(exs); setExDragIdx(i);
+    if(exDragIdx===null||exDragIdx===i)return;
+    const exs=[...exercises];const[r]=exs.splice(exDragIdx,1);exs.splice(i,0,r);
+    setExercises(exs);setExDragIdx(i);
   };
 
   const finishWorkout = () => {
     stopRest(); clearInterval(elapsedRef.current);
-    const dur = Math.round((Date.now()-startMs)/60000);
-    const rec = {
-      id:Date.now(), date:new Date().toISOString().split("T")[0],
-      menuName, duration:dur,
+    const dur=Math.round((Date.now()-startMs)/60000);
+    const rec={
+      id:Date.now(),date:new Date().toISOString().split("T")[0],
+      menuName,duration:dur,
       exercises:exercises.map(ex=>({
-        name:ex.name, muscle:ex.muscle, weight:ex.weight, reps:ex.reps, sets:ex.sets,
+        name:ex.name,muscle:ex.muscle,weight:ex.weight,reps:ex.reps,sets:ex.sets,
         done:Array.from({length:ex.sets},(_,i)=>!!checkedSets[`${ex.id}-${i}`]),
         setData:Array.from({length:ex.sets},(_,i)=>getSetVal(ex,i)),
       })),
     };
-    save(null, [rec,...history]);
+    save(null,[rec,...history]);
     setView("home");
   };
 
   const saveToMenu = () => {
-    if (!menuId) return;
-    const newMenus = menus.map(m => m.id===menuId ? {...m, exercises:exercises.map(e=>e.name)} : m);
-    save(newMenus, null);
+    if(!menuId)return;
+    save(menus.map(m=>m.id===menuId?{...m,exercises:exercises.map(e=>e.name)}:m),null);
     alert("メニューに保存しました！");
   };
 
   const totalSets=exercises.reduce((s,e)=>s+e.sets,0);
   const doneSets=Object.values(checkedSets).filter(Boolean).length;
 
-  const openEditor = (menu) => { setEditingMenu({...menu,exercises:[...menu.exercises]}); setEdTab("list"); setView("editor"); };
-  const saveEditor = () => { save(menus.map(m=>m.id===editingMenu.id?editingMenu:m),null); setView("home"); };
-  const copyMenu = (menu) => save([...menus,{id:genId(),name:menu.name+"（コピー）",exercises:[...menu.exercises]}],null);
-  const deleteMenu = (id) => { if(!window.confirm("削除しますか？")) return; save(menus.filter(m=>m.id!==id),null); };
-  const addNewMenu = () => { const nm={id:genId(),name:"新しいメニュー",exercises:[]}; save([...menus,nm],null); setEditingMenu({...nm}); setEdTab("list"); setView("editor"); };
-  const onMenuDragStart = (i) => setMenuDragIdx(i);
-  const onMenuDragOver = (e,i) => { e.preventDefault(); if(menuDragIdx===null||menuDragIdx===i)return; const m=[...menus];const[r]=m.splice(menuDragIdx,1);m.splice(i,0,r);save(m,null);setMenuDragIdx(i); };
+  const openEditor=(menu)=>{setEditingMenu({...menu,exercises:[...menu.exercises]});setEdTab("list");setView("editor");};
+  const saveEditor=()=>{save(menus.map(m=>m.id===editingMenu.id?editingMenu:m),null);setView("home");};
+  const copyMenu=(menu)=>save([...menus,{id:genId(),name:menu.name+"（コピー）",exercises:[...menu.exercises]}],null);
+  const deleteMenu=(id)=>{if(!window.confirm("削除しますか？"))return;save(menus.filter(m=>m.id!==id),null);};
+  const addNewMenu=()=>{const nm={id:genId(),name:"新しいメニュー",exercises:[]};save([...menus,nm],null);setEditingMenu({...nm});setEdTab("list");setView("editor");};
+  const onMenuDragStart=(i)=>setMenuDragIdx(i);
+  const onMenuDragOver=(e,i)=>{e.preventDefault();if(menuDragIdx===null||menuDragIdx===i)return;const m=[...menus];const[r]=m.splice(menuDragIdx,1);m.splice(i,0,r);save(m,null);setMenuDragIdx(i);};
+
+  // ── セット編集モーダル（共通コンポーネント）──
+  const SetEditModal = ({modal, onSave, onCancel, title}) => (
+    <div style={S.modalOverlay} onClick={onCancel}>
+      <div style={S.modalBox} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:13,color:MUSCLE_COLORS[modal.muscle]||"#94a3b8",fontWeight:700,marginBottom:2}}>{modal.exName}</div>
+        <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:16}}>{title}</div>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:20}}>
+          <div style={S.modalField}>
+            <div style={S.modalLabel}>重量</div>
+            <input style={S.modalInput} type="number" value={modal.weight}
+              onChange={e=>onSave({...modal,weight:parseFloat(e.target.value)||0},false)}/>
+            <div style={S.modalUnit}>kg</div>
+          </div>
+          <div style={S.modalField}>
+            <div style={S.modalLabel}>回数</div>
+            <input style={S.modalInput} type="number" value={modal.reps}
+              onChange={e=>onSave({...modal,reps:parseInt(e.target.value)||0},false)}/>
+            <div style={S.modalUnit}>回</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.modalBtn,background:"#1e293b",color:"#94a3b8",flex:1}} onClick={onCancel}>キャンセル</button>
+          <button style={{...S.modalBtn,background:"#f97316",color:"#000",flex:1,fontWeight:800}}
+            onClick={()=>onSave(modal,true)}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ── HOME ──
-  if (view==="home") return (
+  if(view==="home") return(
     <div style={S.app}>
       <div style={S.homeTop}>
         <div style={S.logo}>🏋️‍♂️ <span style={S.logoText}>GYM NOTE</span></div>
@@ -258,10 +310,10 @@ export default function GymNote() {
   );
 
   // ── EDITOR ──
-  if (view==="editor"&&editingMenu) {
+  if(view==="editor"&&editingMenu){
     const grouped={};
     MASTER_EXERCISES.forEach(e=>{if(!grouped[e.muscle])grouped[e.muscle]=[];grouped[e.muscle].push(e.name);});
-    return (
+    return(
       <div style={S.app}>
         <div style={S.header}>
           <button style={S.backBtn} onClick={()=>setView("home")}>←</button>
@@ -324,39 +376,82 @@ export default function GymNote() {
   }
 
   // ── WORKOUT ──
-  if (view==="workout") {
+  if(view==="workout"){
     const grouped={};
     MASTER_EXERCISES.forEach(e=>{if(!grouped[e.muscle])grouped[e.muscle]=[];grouped[e.muscle].push(e.name);});
     return(
       <div style={S.app}>
-        {/* セット個別編集モーダル */}
+
+        {/* ✏️ 手動セット編集モーダル */}
         {setModal&&(
-          <div style={S.modalOverlay} onClick={()=>setSetModal(null)}>
-            <div style={S.modalBox} onClick={e=>e.stopPropagation()}>
-              <div style={{fontSize:13,color:MUSCLE_COLORS[setModal.muscle]||"#94a3b8",fontWeight:700,marginBottom:2}}>{setModal.exName}</div>
-              <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:16}}>セット {setModal.si+1} の記録</div>
-              <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:20}}>
-                <div style={S.modalField}>
-                  <div style={S.modalLabel}>重量</div>
-                  <input style={S.modalInput} type="number" value={setModal.weight}
-                    onChange={e=>setSetModal(p=>({...p,weight:parseFloat(e.target.value)||0}))}/>
-                  <div style={S.modalUnit}>kg</div>
-                </div>
-                <div style={S.modalField}>
-                  <div style={S.modalLabel}>回数</div>
-                  <input style={S.modalInput} type="number" value={setModal.reps}
-                    onChange={e=>setSetModal(p=>({...p,reps:parseInt(e.target.value)||0}))}/>
-                  <div style={S.modalUnit}>回</div>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <button style={{...S.modalBtn,background:"#1e293b",color:"#94a3b8",flex:1}} onClick={()=>setSetModal(null)}>キャンセル</button>
-                <button style={{...S.modalBtn,background:"#f97316",color:"#000",flex:1,fontWeight:800}} onClick={()=>{
-                  const key=`${setModal.exId}-${setModal.si}`;
-                  setSetOverrides(p=>({...p,[key]:{weight:setModal.weight,reps:setModal.reps}}));
-                  setSetModal(null);
-                }}>保存</button>
-              </div>
+          <SetEditModal
+            modal={setModal}
+            title={`セット ${setModal.si+1} の記録を編集`}
+            onSave={(updated, commit)=>{
+              setSetModal(updated);
+              if(commit){
+                setSetOverrides(p=>({...p,[`${updated.exId}-${updated.si}`]:{weight:updated.weight,reps:updated.reps}}));
+                setSetModal(null);
+              }
+            }}
+            onCancel={()=>setSetModal(null)}
+          />
+        )}
+
+        {/* レスト20秒前：次のセット確認モーダル */}
+        {nextSetModal&&(
+          <div style={S.modalOverlay}>
+            <div style={S.modalBox}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>🔔 レスト終了まで20秒</div>
+              <div style={{fontSize:13,color:MUSCLE_COLORS[nextSetModal.muscle]||"#94a3b8",fontWeight:700,marginBottom:2}}>{nextSetModal.exName}</div>
+              <div style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>次のセット（{nextSetModal.si+1}）の内容</div>
+
+              {!nextSetModal.editing?(
+                <>
+                  <div style={{display:"flex",gap:12,justifyContent:"center",margin:"16px 0"}}>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>重量</div>
+                      <div style={{fontSize:24,fontWeight:800,color:"#f1f5f9"}}>{nextSetModal.weight}<span style={{fontSize:12,color:"#64748b",marginLeft:2}}>kg</span></div>
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>回数</div>
+                      <div style={{fontSize:24,fontWeight:800,color:"#f1f5f9"}}>{nextSetModal.reps}<span style={{fontSize:12,color:"#64748b",marginLeft:2}}>回</span></div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button style={{...S.modalBtn,background:"#1e293b",color:"#94a3b8",flex:1,fontSize:13}}
+                      onClick={()=>setNextSetModal(p=>({...p,editing:true}))}>変更する</button>
+                    <button style={{...S.modalBtn,background:"#f97316",color:"#000",flex:2,fontWeight:800}}
+                      onClick={()=>setNextSetModal(null)}>そのままでOK</button>
+                  </div>
+                </>
+              ):(
+                <>
+                  <div style={{display:"flex",gap:12,justifyContent:"center",margin:"16px 0"}}>
+                    <div style={S.modalField}>
+                      <div style={S.modalLabel}>重量</div>
+                      <input style={S.modalInput} type="number" value={nextSetModal.weight}
+                        onChange={e=>setNextSetModal(p=>({...p,weight:parseFloat(e.target.value)||0}))}/>
+                      <div style={S.modalUnit}>kg</div>
+                    </div>
+                    <div style={S.modalField}>
+                      <div style={S.modalLabel}>回数</div>
+                      <input style={S.modalInput} type="number" value={nextSetModal.reps}
+                        onChange={e=>setNextSetModal(p=>({...p,reps:parseInt(e.target.value)||0}))}/>
+                      <div style={S.modalUnit}>回</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button style={{...S.modalBtn,background:"#1e293b",color:"#94a3b8",flex:1}}
+                      onClick={()=>setNextSetModal(p=>({...p,editing:false}))}>戻る</button>
+                    <button style={{...S.modalBtn,background:"#f97316",color:"#000",flex:1,fontWeight:800}}
+                      onClick={()=>{
+                        setSetOverrides(p=>({...p,[`${nextSetModal.exId}-${nextSetModal.si}`]:{weight:nextSetModal.weight,reps:nextSetModal.reps}}));
+                        setNextSetModal(null);
+                      }}>保存</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -407,21 +502,21 @@ export default function GymNote() {
                     <div style={S.edLabel}>重量</div>
                     <input style={S.edInput} type="number" value={exDisplayVal(ex,"weight")}
                       onChange={e=>updateEx(ex.id,"weight",e.target.value)}
-                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,weight:0,weight_raw:undefined}:v)); }}/>
+                      onBlur={e=>{if(e.target.value==="")setExercises(p=>p.map(v=>v.id===ex.id?{...v,weight:0,weight_raw:undefined}:v));}}/>
                     <div style={S.edUnit}>kg</div>
                   </div>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>回数</div>
                     <input style={S.edInput} type="number" value={exDisplayVal(ex,"reps")}
                       onChange={e=>updateEx(ex.id,"reps",e.target.value)}
-                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,reps:1,reps_raw:undefined}:v)); }}/>
+                      onBlur={e=>{if(e.target.value==="")setExercises(p=>p.map(v=>v.id===ex.id?{...v,reps:1,reps_raw:undefined}:v));}}/>
                     <div style={S.edUnit}>回</div>
                   </div>
                   <div style={S.edGroup}>
                     <div style={S.edLabel}>セット</div>
                     <input style={S.edInput} type="number" value={exDisplayVal(ex,"sets")}
                       onChange={e=>updateEx(ex.id,"sets",e.target.value)}
-                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,sets:0,sets_raw:undefined}:v)); }}/>
+                      onBlur={e=>{if(e.target.value==="")setExercises(p=>p.map(v=>v.id===ex.id?{...v,sets:0,sets_raw:undefined}:v));}}/>
                     <div style={S.edUnit}>set</div>
                   </div>
                 </div>
@@ -430,7 +525,7 @@ export default function GymNote() {
                     <div style={S.edLabel}>REST</div>
                     <input style={{...S.edInput,width:56}} type="number" value={exDisplayVal(ex,"rest")}
                       onChange={e=>updateEx(ex.id,"rest",e.target.value)}
-                      onBlur={e=>{ if(e.target.value==="") setExercises(p=>p.map(v=>v.id===ex.id?{...v,rest:0,rest_raw:undefined}:v)); }}/>
+                      onBlur={e=>{if(e.target.value==="")setExercises(p=>p.map(v=>v.id===ex.id?{...v,rest:0,rest_raw:undefined}:v));}}/>
                     <div style={S.edUnit}>秒</div>
                   </div>
                 </div>
@@ -440,11 +535,19 @@ export default function GymNote() {
                     const ov=setOverrides[`${ex.id}-${i}`];
                     return(
                       <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                        <button
-                          style={{...S.setBtn,...(done?{background:mc,color:"#000",borderColor:mc}:{}),(ov?{borderColor:"#f97316"}:{})}}
-                          onClick={()=>onSetTap(ex,i)}>
-                          {done?"✓":i+1}
-                        </button>
+                        <div style={{display:"flex",alignItems:"center",gap:2}}>
+                          <button
+                            style={{...S.setBtn,...(done?{background:mc,color:"#000",borderColor:mc}:{}),...(ov?{borderColor:"#f97316"}:{})}}
+                            onClick={()=>toggleSet(ex.id,i)}>
+                            {done?"✓":i+1}
+                          </button>
+                          <button
+                            style={{background:"none",border:"none",color:"#334155",fontSize:12,cursor:"pointer",padding:"0 2px",lineHeight:1}}
+                            onClick={()=>{
+                              const {weight,reps}=getSetVal(ex,i);
+                              setSetModal({exId:ex.id,si:i,weight,reps,exName:ex.name,muscle:ex.muscle});
+                            }}>✏️</button>
+                        </div>
                         {ov&&(
                           <div style={{fontSize:9,color:"#f97316",textAlign:"center",lineHeight:1.2}}>
                             {ov.weight}kg<br/>{ov.reps}回
@@ -469,7 +572,7 @@ export default function GymNote() {
                 const already=exercises.some(e=>e.name===n);
                 return(
                   <button key={n} style={{...S.exPickRow,background:already?"#1a2a1a":"#111827",borderColor:already?"#334155":"#1e293b"}}
-                    onClick={()=>{ if(!already) addExToWorkout(n); }}>
+                    onClick={()=>{if(!already)addExToWorkout(n);}}>
                     <span style={{color:already?"#4ade80":"#cbd5e1"}}>{n}</span>
                     <span style={{color:already?"#4ade80":"#334155",fontSize:16}}>{already?"✓":"+"}</span>
                   </button>
@@ -594,7 +697,6 @@ const S={
   cardTop:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8},
   muscleBadge:{fontSize:10,fontWeight:700,letterSpacing:1,border:"1px solid",borderRadius:4,padding:"1px 6px",display:"inline-block",marginBottom:4},
   exName:{fontSize:15,fontWeight:700,color:"#f1f5f9",lineHeight:1.3},
-  restTag:{fontSize:11,color:"#475569",background:"#1e293b",padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap"},
   editors:{display:"flex",gap:8,margin:"10px 0"},
   edGroup:{display:"flex",alignItems:"center",gap:4,background:"#1e293b",borderRadius:8,padding:"6px 10px"},
   edLabel:{fontSize:10,color:"#475569",minWidth:20},
@@ -608,7 +710,7 @@ const S={
   exEditRow:{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#111827",borderLeft:"3px solid #334155",margin:"6px 12px 0",borderRadius:10,padding:"10px 12px"},
   muscleLabel:{fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",padding:"10px 16px 4px"},
   exPickRow:{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid",borderRadius:0,padding:"13px 16px",cursor:"pointer",textAlign:"left",fontSize:14,borderLeft:"none",borderRight:"none",borderTop:"none"},
-  modalOverlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100},
+  modalOverlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100},
   modalBox:{background:"#0d1526",border:"1px solid #1e293b",borderRadius:16,padding:"24px 20px",width:280,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"},
   modalField:{display:"flex",flexDirection:"column",alignItems:"center",gap:6},
   modalLabel:{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1},
