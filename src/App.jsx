@@ -55,6 +55,7 @@ export default function GymNote() {
   const [restTimer, setRestTimer] = useState(null);
   const [showAddEx, setShowAddEx] = useState(false);
   const [exDragIdx, setExDragIdx] = useState(null);
+  const [edTab, setEdTab] = useState("list");
   const [menuDragIdx, setMenuDragIdx] = useState(null);
   const [editingMenu, setEditingMenu] = useState(null);
   const restRef = useRef(null);
@@ -261,7 +262,6 @@ export default function GymNote() {
   if (view==="editor"&&editingMenu) {
     const grouped={};
     MASTER_EXERCISES.forEach(e=>{if(!grouped[e.muscle])grouped[e.muscle]=[];grouped[e.muscle].push(e.name);});
-    const [edTab, setEdTab] = useState("list");
     return (
       <div style={S.app}>
         <div style={S.header}>
