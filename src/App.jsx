@@ -131,14 +131,21 @@ export default function GymNote() {
     else stopRest();
   };
 
-  // 長押し開始
-  const onSetLongPressStart = (ex, si) => {
-    longPressRef.current = setTimeout(() => {
+  // ダブルタップ検出
+  const lastTapRef = useRef({});
+  const onSetTap = (ex, si) => {
+    const key = `${ex.id}-${si}`;
+    const now = Date.now();
+    if (lastTapRef.current[key] && now - lastTapRef.current[key] < 350) {
+      // ダブルタップ
+      lastTapRef.current[key] = 0;
       const {weight, reps} = getSetVal(ex, si);
       setSetModal({exId:ex.id, si, weight, reps, exName:ex.name, muscle:ex.muscle});
-    }, 500);
+    } else {
+      lastTapRef.current[key] = now;
+      toggleSet(ex.id, si);
+    }
   };
-  const onSetLongPressEnd = () => clearTimeout(longPressRef.current);
 
   const updateEx = (exId, field, val) => {
     setExercises(p=>p.map(e=>{
@@ -435,12 +442,7 @@ export default function GymNote() {
                       <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                         <button
                           style={{...S.setBtn,...(done?{background:mc,color:"#000",borderColor:mc}:{}),(ov?{borderColor:"#f97316"}:{})}}
-                          onClick={()=>toggleSet(ex.id,i)}
-                          onMouseDown={()=>onSetLongPressStart(ex,i)}
-                          onMouseUp={onSetLongPressEnd}
-                          onMouseLeave={onSetLongPressEnd}
-                          onTouchStart={()=>onSetLongPressStart(ex,i)}
-                          onTouchEnd={onSetLongPressEnd}>
+                          onClick={()=>onSetTap(ex,i)}>
                           {done?"✓":i+1}
                         </button>
                         {ov&&(
