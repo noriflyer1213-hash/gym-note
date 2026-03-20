@@ -110,7 +110,7 @@ if (!p) return null;
 const elapsed = Math.floor((Date.now() - p.resumeAt) / 1000);
 const newRem = Math.max(0, p.remAtPause - elapsed);
 if (newRem <= 0) { clearInterval(restRef.current); return null; }
-return { …p, rem: newRem };
+return {...p, rem: newRem };
 });
 }
 };
@@ -146,7 +146,7 @@ return () => clearInterval(elapsedRef.current);
 const launchWorkout = (name, exNames, mid, recordId) => {
 const exs = exNames.map(n => {
 const m = MASTER_EXERCISES.find(e => e.name === n) || { name: n, defaultWeight: 0, defaultReps: 10, defaultSets: 3, rest: 120, muscle: “その他” };
-return { …m, id: genId(), weight: m.defaultWeight, reps: m.defaultReps, sets: m.defaultSets };
+return {...m, id: genId(), weight: m.defaultWeight, reps: m.defaultReps, sets: m.defaultSets };
 });
 setMenuName(name); setMenuId(mid || null); setEditingRecordId(recordId || null);
 setExercises(exs); setCheckedSets({}); setSetOverrides({});
@@ -219,7 +219,7 @@ return ch;
 return exs;
 });
 }
-return { …p, rem: newRem, remAtPause: newRem, resumeAt: Date.now() };
+return {...p, rem: newRem, remAtPause: newRem, resumeAt: Date.now() };
 });
 }, 1000);
 };
@@ -229,7 +229,7 @@ const stopRest = () => { clearInterval(restRef.current); setRestTimer(null); };
 const toggleSet = (exId, si) => {
 const key = `${exId}-${si}`;
 const wasDone = !!checkedSets[key];
-setCheckedSets(p => ({ …p, [key]: !wasDone }));
+setCheckedSets(p => ({...p, [key]: !wasDone }));
 if (!wasDone) { const ex = exercises.find(e => e.id === exId); if (ex && ex.rest > 0) startRest(ex.rest, ex.name, exId, si); }
 else stopRest();
 };
@@ -237,10 +237,10 @@ else stopRest();
 const updateEx = (exId, field, val) => {
 setExercises(p => p.map(e => {
 if (e.id !== exId) return e;
-if (val === “” || val === “-”) return { …e, [field + “_raw”]: val };
+if (val === “” || val === “-”) return {...e, [field + “_raw”]: val };
 const num = field === “weight” ? parseFloat(val) : parseInt(val);
 if (isNaN(num)) return e;
-return { …e, [field]: num, [field + “_raw”]: undefined };
+return {...e, [field]: num, [field + “_raw”]: undefined };
 }));
 };
 const exDV = (ex, f) => ex[f + “_raw”] !== undefined ? ex[f + “_raw”] : ex[f];
@@ -253,7 +253,7 @@ setSetOverrides(p => { const n = {}; Object.entries(p).forEach(([k, v]) => { if 
 
 const addExToWorkout = (name) => {
 const m = MASTER_EXERCISES.find(e => e.name === name) || { name, defaultWeight: 0, defaultReps: 10, defaultSets: 3, rest: 120, muscle: “その他” };
-setExercises(p => […p, { …m, id: genId(), weight: m.defaultWeight, reps: m.defaultReps, sets: m.defaultSets }]);
+setExercises(p => […p, {...m, id: genId(), weight: m.defaultWeight, reps: m.defaultReps, sets: m.defaultSets }]);
 };
 
 const finishWorkout = () => {
@@ -271,14 +271,14 @@ setData: Array.from({ length: ex.sets }, (*, i) => getSetVal(ex, i)),
 };
 const newHistory = editingRecordId
 ? historyRef.current.map(r => r.id === editingRecordId ? rec : r)
-: [rec, …historyRef.current];
+: [rec,...historyRef.current];
 saveData(undefined, newHistory);
 setView(“home”);
 };
 
 const saveToMenu = () => {
 if (!menuId) return;
-saveData(menusRef.current.map(m => m.id === menuId ? { …m, exercises: exercises.map(e => e.name) } : m), undefined);
+saveData(menusRef.current.map(m => m.id === menuId ? {...m, exercises: exercises.map(e => e.name) } : m), undefined);
 alert(“メニューに保存しました！”);
 };
 
@@ -296,11 +296,11 @@ const [editorExercises, setEditorExercises] = useState([]);
 useEffect(() => { if (editingMenu) setEditorExercises([…editingMenu.exercises]); }, [editingMenu?.id]);
 const editorSort = useTouchSort(editorExercises, setEditorExercises);
 
-const openEditor = (menu) => { setEditingMenu({ …menu, exercises: […menu.exercises] }); setEditorExercises([…menu.exercises]); setEdTab(“list”); setView(“editor”); };
-const saveEditor = () => { const u = { …editingMenu, exercises: editorExercises }; saveData(menusRef.current.map(m => m.id === u.id ? u : m), undefined); setView(“home”); };
+const openEditor = (menu) => { setEditingMenu({...menu, exercises: […menu.exercises] }); setEditorExercises([…menu.exercises]); setEdTab(“list”); setView(“editor”); };
+const saveEditor = () => { const u = {...editingMenu, exercises: editorExercises }; saveData(menusRef.current.map(m => m.id === u.id ? u : m), undefined); setView(“home”); };
 const copyMenu = (menu) => saveData([…menusRef.current, { id: genId(), name: menu.name + “（コピー）”, exercises: […menu.exercises] }], undefined);
 const deleteMenu = (id) => { if (!window.confirm(“削除しますか？”)) return; saveData(menusRef.current.filter(m => m.id !== id), undefined); };
-const addNewMenu = () => { const nm = { id: genId(), name: “新しいメニュー”, exercises: [] }; saveData([…menusRef.current, nm], undefined); setEditingMenu({ …nm }); setEditorExercises([]); setEdTab(“list”); setView(“editor”); };
+const addNewMenu = () => { const nm = { id: genId(), name: “新しいメニュー”, exercises: [] }; saveData([…menusRef.current, nm], undefined); setEditingMenu({...nm }); setEditorExercises([]); setEdTab(“list”); setView(“editor”); };
 
 const workoutSort = useTouchSort(exercises, setExercises);
 
@@ -327,7 +327,7 @@ if (view === “home”) return (
 <div style={S.section}>
 <div style={S.sectionTitle}>メニュー</div>
 {menus.map((menu) => (
-<div key={menu.id} style={{ …S.menuCard, marginBottom: 8 }}>
+<div key={menu.id} style={{...S.menuCard, marginBottom: 8 }}>
 <div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “flex-start” }}>
 <button style={S.menuCardInner} onClick={() => launchWorkout(menu.name, menu.exercises, menu.id)}>
 <div style={S.menuCardName}>{menu.name}</div>
@@ -371,14 +371,14 @@ return (
 <div style={S.header}>
 <button style={S.backBtn} onClick={() => setView(“home”)}>←</button>
 <div style={{ flex: 1 }}>
-<input style={S.nameInputInline} value={editingMenu.name} onChange={e => setEditingMenu(p => ({ …p, name: e.target.value }))} />
+<input style={S.nameInputInline} value={editingMenu.name} onChange={e => setEditingMenu(p => ({...p, name: e.target.value }))} />
 <div style={S.headerSub}>{editorExercises.length}種目</div>
 </div>
 <button style={S.finishBtn} onClick={saveEditor}>保存</button>
 </div>
 <div style={{ display: “flex”, borderBottom: “1px solid #1e293b” }}>
-<button style={{ …S.tab, …(edTab === “list” ? S.tabActive : {}) }} onClick={() => setEdTab(“list”)}>種目一覧</button>
-<button style={{ …S.tab, …(edTab === “add” ? S.tabActive : {}) }} onClick={() => setEdTab(“add”)}>種目を追加</button>
+<button style={{...S.tab,...(edTab === “list” ? S.tabActive : {}) }} onClick={() => setEdTab(“list”)}>種目一覧</button>
+<button style={{...S.tab,...(edTab === “add” ? S.tabActive : {}) }} onClick={() => setEdTab(“add”)}>種目を追加</button>
 </div>
 <div style={S.scroll} onTouchMove={edTab === “list” ? editorSort.onTouchMove : undefined} onTouchEnd={edTab === “list” ? editorSort.onTouchEnd : undefined}>
 {edTab === “list” && (
@@ -388,11 +388,11 @@ return (
 const m = MASTER_EXERCISES.find(e => e.name === name);
 const mc = MUSCLE_COLORS[m?.muscle] || “#94a3b8”;
 return (
-<div key={name + i} ref={el => editorSort.itemRefs.current[i] = el} style={{ …S.exEditRow, borderLeftColor: mc }}>
+<div key={name + i} ref={el => editorSort.itemRefs.current[i] = el} style={{...S.exEditRow, borderLeftColor: mc }}>
 <div style={{ display: “flex”, alignItems: “center”, gap: 8, flex: 1 }}>
 <span style={{ color: “#64748b”, fontSize: 22, cursor: “grab”, padding: “4px 6px”, touchAction: “none” }} onTouchStart={editorSort.onTouchStart(i)}>☰</span>
 <div>
-<div style={{ …S.muscleBadge, color: mc, borderColor: mc, marginBottom: 2 }}>{m?.muscle || “その他”}</div>
+<div style={{...S.muscleBadge, color: mc, borderColor: mc, marginBottom: 2 }}>{m?.muscle || “その他”}</div>
 <div style={{ fontSize: 14, fontWeight: 600, color: “#f1f5f9” }}>{name}</div>
 </div>
 </div>
@@ -405,11 +405,11 @@ onClick={() => setEditorExercises(p => p.filter((_, j) => j !== i))}>×</button>
 )}
 {edTab === “add” && Object.entries(grouped).map(([muscle, names]) => (
 <div key={muscle}>
-<div style={{ …S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
+<div style={{...S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
 {names.map(n => {
 const already = editorExercises.includes(n);
 return (
-<button key={n} style={{ …S.exPickRow, background: already ? “#1e3a5f” : “#111827”, borderColor: already ? “#3b82f6” : “#1e293b” }}
+<button key={n} style={{...S.exPickRow, background: already ? “#1e3a5f” : “#111827”, borderColor: already ? “#3b82f6” : “#1e293b” }}
 onClick={() => setEditorExercises(p => already ? p.filter(x => x !== n) : […p, n])}>
 <span style={{ color: already ? “#93c5fd” : “#cbd5e1” }}>{n}</span>
 <span style={{ color: already ? “#ef4444” : “#334155”, fontSize: 20, fontWeight: 700 }}>{already ? “×” : “+”}</span>
@@ -436,12 +436,12 @@ return (
 <div style={{ fontSize: 13, color: MUSCLE_COLORS[setModal.muscle] || “#94a3b8”, fontWeight: 700, marginBottom: 2 }}>{setModal.exName}</div>
 <div style={{ fontSize: 15, fontWeight: 700, color: “#f1f5f9”, marginBottom: 16 }}>セット {setModal.si + 1} の記録を編集</div>
 <div style={{ display: “flex”, gap: 12, justifyContent: “center”, marginBottom: 20 }}>
-<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={setModal.weight} onChange={e => setSetModal(p => ({ …p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
-<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={setModal.reps} onChange={e => setSetModal(p => ({ …p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={setModal.weight} onChange={e => setSetModal(p => ({...p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={setModal.reps} onChange={e => setSetModal(p => ({...p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
 </div>
 <div style={{ display: “flex”, gap: 8 }}>
-<button style={{ …S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setSetModal(null)}>キャンセル</button>
-<button style={{ …S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => { setSetOverrides(p => ({ …p, [`${setModal.exId}-${setModal.si}`]: { weight: setModal.weight, reps: setModal.reps } })); setSetModal(null); }}>保存</button>
+<button style={{...S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setSetModal(null)}>キャンセル</button>
+<button style={{...S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => { setSetOverrides(p => ({...p, [`${setModal.exId}-${setModal.si}`]: { weight: setModal.weight, reps: setModal.reps } })); setSetModal(null); }}>保存</button>
 </div>
 </div>
 </div>
@@ -459,19 +459,19 @@ return (
 <div style={{ textAlign: “center” }}><div style={{ fontSize: 11, color: “#64748b”, marginBottom: 4 }}>回数</div><div style={{ fontSize: 24, fontWeight: 800, color: “#f1f5f9” }}>{nextSetModal.reps}<span style={{ fontSize: 12, color: “#64748b”, marginLeft: 2 }}>回</span></div></div>
 </div>
 <div style={{ display: “flex”, gap: 8 }}>
-<button style={{ …S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1, fontSize: 13 }} onClick={() => setNextSetModal(p => ({ …p, editing: true }))}>変更する</button>
-<button style={{ …S.modalBtn, background: “#f97316”, color: “#000”, flex: 2, fontWeight: 800 }} onClick={() => setNextSetModal(null)}>そのままでOK</button>
+<button style={{...S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1, fontSize: 13 }} onClick={() => setNextSetModal(p => ({...p, editing: true }))}>変更する</button>
+<button style={{...S.modalBtn, background: “#f97316”, color: “#000”, flex: 2, fontWeight: 800 }} onClick={() => setNextSetModal(null)}>そのままでOK</button>
 </div>
 </>
 ) : (
 <>
 <div style={{ display: “flex”, gap: 12, justifyContent: “center”, margin: “16px 0” }}>
-<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={nextSetModal.weight} onChange={e => setNextSetModal(p => ({ …p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
-<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={nextSetModal.reps} onChange={e => setNextSetModal(p => ({ …p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={nextSetModal.weight} onChange={e => setNextSetModal(p => ({...p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={nextSetModal.reps} onChange={e => setNextSetModal(p => ({...p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
 </div>
 <div style={{ display: “flex”, gap: 8 }}>
-<button style={{ …S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setNextSetModal(p => ({ …p, editing: false }))}>戻る</button>
-<button style={{ …S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => { setSetOverrides(p => ({ …p, [`${nextSetModal.exId}-${nextSetModal.si}`]: { weight: nextSetModal.weight, reps: nextSetModal.reps } })); setNextSetModal(null); }}>保存</button>
+<button style={{...S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setNextSetModal(p => ({...p, editing: false }))}>戻る</button>
+<button style={{...S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => { setSetOverrides(p => ({...p, [`${nextSetModal.exId}-${nextSetModal.si}`]: { weight: nextSetModal.weight, reps: nextSetModal.reps } })); setNextSetModal(null); }}>保存</button>
 </div>
 </>
 )}
@@ -485,16 +485,16 @@ return (
 <div style={S.headerSub}>{doneSets}/{totalSets}セット · {elapsedStr}</div>
 </div>
 <div style={{ display: “flex”, gap: 6 }}>
-{menuId && <button style={{ …S.iconBtn, background: “#1e3a5f” }} onClick={saveToMenu}>💾</button>}
+{menuId && <button style={{...S.iconBtn, background: “#1e3a5f” }} onClick={saveToMenu}>💾</button>}
 <button style={S.finishBtn} onClick={finishWorkout}>保存</button>
 </div>
 </div>
-<div style={S.progTrack}><div style={{ …S.progBar, width: `${totalSets > 0 ? doneSets / totalSets * 100 : 0}%` }} /></div>
+<div style={S.progTrack}><div style={{...S.progBar, width: `${totalSets > 0 ? doneSets / totalSets * 100 : 0}%` }} /></div>
 {restTimer && (
 <div style={S.timerBox}>
 <div style={S.timerName}>{restTimer.name} · レスト中</div>
 <div style={S.timerNum}>{formatTime(restTimer.rem)}</div>
-<div style={S.timerTrack}><div style={{ …S.timerFill, width: `${(1 - restTimer.rem / restTimer.total) * 100}%` }} /></div>
+<div style={S.timerTrack}><div style={{...S.timerFill, width: `${(1 - restTimer.rem / restTimer.total) * 100}%` }} /></div>
 <button style={S.timerSkip} onClick={stopRest}>スキップ ×</button>
 </div>
 )}
@@ -503,24 +503,24 @@ return (
 const allDone = Array.from({ length: ex.sets }, (*, i) => !!checkedSets[`${ex.id}-${i}`]).every(Boolean) && ex.sets > 0;
 const mc = MUSCLE_COLORS[ex.muscle] || “#94a3b8”;
 return (
-<div key={ex.id} ref={el => workoutSort.itemRefs.current[idx] = el} style={{ …S.card, opacity: allDone ? 0.5 : 1, borderLeftColor: mc }}>
+<div key={ex.id} ref={el => workoutSort.itemRefs.current[idx] = el} style={{...S.card, opacity: allDone ? 0.5 : 1, borderLeftColor: mc }}>
 <div style={S.cardTop}>
 <div style={{ display: “flex”, alignItems: “flex-start”, gap: 8 }}>
 <span style={{ color: “#475569”, fontSize: 22, cursor: “grab”, marginTop: 2, padding: “2px 4px”, touchAction: “none” }} onTouchStart={workoutSort.onTouchStart(idx)}>☰</span>
 <div>
-<div style={{ …S.muscleBadge, color: mc, borderColor: mc }}>{ex.muscle}</div>
+<div style={{...S.muscleBadge, color: mc, borderColor: mc }}>{ex.muscle}</div>
 <div style={S.exName}>{ex.name}</div>
 </div>
 </div>
 <button style={{ background: “none”, border: “none”, color: “#475569”, fontSize: 18, cursor: “pointer”, padding: “0 4px” }} onClick={() => removeEx(ex.id)}>×</button>
 </div>
-<div style={{ …S.editors, marginBottom: 4 }}>
-<div style={S.edGroup}><div style={S.edLabel}>重量</div><input style={S.edInput} type=“number” value={exDV(ex, “weight”)} onChange={e => updateEx(ex.id, “weight”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? { …v, weight: 0, weight_raw: undefined } : v)); }} /><div style={S.edUnit}>kg</div></div>
-<div style={S.edGroup}><div style={S.edLabel}>回数</div><input style={S.edInput} type=“number” value={exDV(ex, “reps”)} onChange={e => updateEx(ex.id, “reps”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? { …v, reps: 1, reps_raw: undefined } : v)); }} /><div style={S.edUnit}>回</div></div>
-<div style={S.edGroup}><div style={S.edLabel}>セット</div><input style={S.edInput} type=“number” value={exDV(ex, “sets”)} onChange={e => updateEx(ex.id, “sets”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? { …v, sets: 0, sets_raw: undefined } : v)); }} /><div style={S.edUnit}>set</div></div>
+<div style={{...S.editors, marginBottom: 4 }}>
+<div style={S.edGroup}><div style={S.edLabel}>重量</div><input style={S.edInput} type=“number” value={exDV(ex, “weight”)} onChange={e => updateEx(ex.id, “weight”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? {...v, weight: 0, weight_raw: undefined } : v)); }} /><div style={S.edUnit}>kg</div></div>
+<div style={S.edGroup}><div style={S.edLabel}>回数</div><input style={S.edInput} type=“number” value={exDV(ex, “reps”)} onChange={e => updateEx(ex.id, “reps”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? {...v, reps: 1, reps_raw: undefined } : v)); }} /><div style={S.edUnit}>回</div></div>
+<div style={S.edGroup}><div style={S.edLabel}>セット</div><input style={S.edInput} type=“number” value={exDV(ex, “sets”)} onChange={e => updateEx(ex.id, “sets”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? {...v, sets: 0, sets_raw: undefined } : v)); }} /><div style={S.edUnit}>set</div></div>
 </div>
-<div style={{ …S.editors, marginTop: 0 }}>
-<div style={S.edGroup}><div style={S.edLabel}>REST</div><input style={{ …S.edInput, width: 56 }} type=“number” value={exDV(ex, “rest”)} onChange={e => updateEx(ex.id, “rest”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? { …v, rest: 0, rest_raw: undefined } : v)); }} /><div style={S.edUnit}>秒</div></div>
+<div style={{...S.editors, marginTop: 0 }}>
+<div style={S.edGroup}><div style={S.edLabel}>REST</div><input style={{...S.edInput, width: 56 }} type=“number” value={exDV(ex, “rest”)} onChange={e => updateEx(ex.id, “rest”, e.target.value)} onBlur={e => { if (e.target.value === “”) setExercises(p => p.map(v => v.id === ex.id ? {...v, rest: 0, rest_raw: undefined } : v)); }} /><div style={S.edUnit}>秒</div></div>
 </div>
 <div style={S.setRow}>
 {ex.sets > 0 && Array.from({ length: ex.sets }, (*, i) => {
@@ -529,7 +529,7 @@ const ov = setOverrides[`${ex.id}-${i}`];
 return (
 <div key={i} style={{ display: “flex”, flexDirection: “column”, alignItems: “center”, gap: 3 }}>
 <div style={{ display: “flex”, alignItems: “center”, gap: 2 }}>
-<button style={{ …S.setBtn, …(done ? { background: mc, color: “#000”, borderColor: mc } : {}), …(ov ? { borderColor: “#f97316” } : {}) }} onClick={() => toggleSet(ex.id, i)}>{done ? “✓” : i + 1}</button>
+<button style={{...S.setBtn,...(done ? { background: mc, color: “#000”, borderColor: mc } : {}),...(ov ? { borderColor: “#f97316” } : {}) }} onClick={() => toggleSet(ex.id, i)}>{done ? “✓” : i + 1}</button>
 <button style={{ background: “none”, border: “none”, color: “#475569”, fontSize: 13, cursor: “pointer”, padding: “0 2px” }} onClick={() => { const { weight, reps } = getSetVal(ex, i); setSetModal({ exId: ex.id, si: i, weight, reps, exName: ex.name, muscle: ex.muscle }); }}>✏️</button>
 </div>
 {ov && <div style={{ fontSize: 9, color: “#f97316”, textAlign: “center”, lineHeight: 1.2 }}>{ov.weight}kg<br />{ov.reps}回</div>}
@@ -541,15 +541,15 @@ return (
 );
 })}
 <div style={{ padding: “8px 12px” }}>
-<button style={{ …S.buildCard, marginTop: 0 }} onClick={() => setShowAddEx(p => !p)}>{showAddEx ? “▲ 閉じる” : “＋ 種目を追加”}</button>
+<button style={{...S.buildCard, marginTop: 0 }} onClick={() => setShowAddEx(p => !p)}>{showAddEx ? “▲ 閉じる” : “＋ 種目を追加”}</button>
 </div>
 {showAddEx && Object.entries(grouped).map(([muscle, names]) => (
 <div key={muscle}>
-<div style={{ …S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
+<div style={{...S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
 {names.map(n => {
 const already = exercises.some(e => e.name === n);
 return (
-<button key={n} style={{ …S.exPickRow, background: already ? “#1a2a1a” : “#111827”, borderColor: already ? “#334155” : “#1e293b” }} onClick={() => { if (!already) addExToWorkout(n); }}>
+<button key={n} style={{...S.exPickRow, background: already ? “#1a2a1a” : “#111827”, borderColor: already ? “#334155” : “#1e293b” }} onClick={() => { if (!already) addExToWorkout(n); }}>
 <span style={{ color: already ? “#4ade80” : “#cbd5e1” }}>{n}</span>
 <span style={{ color: already ? “#4ade80” : “#334155”, fontSize: 16 }}>{already ? “✓” : “+”}</span>
 </button>
@@ -598,9 +598,9 @@ return (
 <div style={S.headerSub}>{r.menuName} · {r.duration}分</div>
 </div>
 <div style={{ display: “flex”, gap: 6 }}>
-<button style={{ …S.iconBtn, background: “#1e3a5f”, fontSize: 16 }} onClick={() => resumeFromRecord(r)} title=“再開”>▶</button>
-<button style={{ …S.iconBtn, fontSize: 16 }} onClick={() => startEditRecord(r)} title=“編集”>✏️</button>
-<button style={{ …S.iconBtn, color: “#ef4444” }} onClick={() => deleteRecord(r.id)} title=“削除”>🗑</button>
+<button style={{...S.iconBtn, background: “#1e3a5f”, fontSize: 16 }} onClick={() => resumeFromRecord(r)} title=“再開”>▶</button>
+<button style={{...S.iconBtn, fontSize: 16 }} onClick={() => startEditRecord(r)} title=“編集”>✏️</button>
+<button style={{...S.iconBtn, color: “#ef4444” }} onClick={() => deleteRecord(r.id)} title=“削除”>🗑</button>
 </div>
 </div>
 <div style={S.scroll}>
@@ -608,8 +608,8 @@ return (
 const mc = MUSCLE_COLORS[ex.muscle] || “#94a3b8”;
 const done = ex.done.filter(Boolean).length;
 return (
-<div key={i} style={{ …S.card, borderLeftColor: mc }}>
-<div style={{ …S.muscleBadge, color: mc, borderColor: mc, marginBottom: 4 }}>{ex.muscle}</div>
+<div key={i} style={{...S.card, borderLeftColor: mc }}>
+<div style={{...S.muscleBadge, color: mc, borderColor: mc, marginBottom: 4 }}>{ex.muscle}</div>
 <div style={S.exName}>{ex.name}</div>
 <div style={{ color: “#94a3b8”, fontSize: 12, margin: “6px 0 8px” }}>
 デフォルト：{ex.weight > 0 ? `${ex.weight}kg × ` : “BW × “}{ex.reps}回
@@ -651,31 +651,31 @@ return (
 <button style={S.finishBtn} onClick={saveEditRecord}>保存</button>
 </div>
 <div style={{ display: “flex”, borderBottom: “1px solid #1e293b” }}>
-<button style={{ …S.tab, …(erTab === “list” ? S.tabActive : {}) }} onClick={() => setErTab(“list”)}>記録を編集</button>
-<button style={{ …S.tab, …(erTab === “add” ? S.tabActive : {}) }} onClick={() => setErTab(“add”)}>種目を追加</button>
+<button style={{...S.tab,...(erTab === “list” ? S.tabActive : {}) }} onClick={() => setErTab(“list”)}>記録を編集</button>
+<button style={{...S.tab,...(erTab === “add” ? S.tabActive : {}) }} onClick={() => setErTab(“add”)}>種目を追加</button>
 </div>
 <div style={S.scroll}>
 {erTab === “list” && editingRecord.exercises.map((ex, ei) => {
 const mc = MUSCLE_COLORS[ex.muscle] || “#94a3b8”;
 return (
-<div key={ei} style={{ …S.card, borderLeftColor: mc }}>
+<div key={ei} style={{...S.card, borderLeftColor: mc }}>
 <div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “flex-start”, marginBottom: 8 }}>
 <div>
-<div style={{ …S.muscleBadge, color: mc, borderColor: mc, marginBottom: 4 }}>{ex.muscle}</div>
+<div style={{...S.muscleBadge, color: mc, borderColor: mc, marginBottom: 4 }}>{ex.muscle}</div>
 <div style={S.exName}>{ex.name}</div>
 </div>
 <button style={{ background: “none”, border: “none”, color: “#ef4444”, fontSize: 18, cursor: “pointer” }}
-onClick={() => setEditingRecord(p => ({ …p, exercises: p.exercises.filter((*, j) => j !== ei) }))}>×</button>
+onClick={() => setEditingRecord(p => ({...p, exercises: p.exercises.filter((*, j) => j !== ei) }))}>×</button>
 </div>
 {/* 重量・回数・セット数編集 */}
-<div style={{ …S.editors, marginBottom: 4 }}>
+<div style={{...S.editors, marginBottom: 4 }}>
 <div style={S.edGroup}><div style={S.edLabel}>重量</div>
 <input style={S.edInput} type=“number” value={ex.weight}
-onChange={e => setEditingRecord(p => ({ …p, exercises: p.exercises.map((x, j) => j === ei ? { …x, weight: parseFloat(e.target.value) || 0 } : x) }))} />
+onChange={e => setEditingRecord(p => ({...p, exercises: p.exercises.map((x, j) => j === ei ? {...x, weight: parseFloat(e.target.value) || 0 } : x) }))} />
 <div style={S.edUnit}>kg</div></div>
 <div style={S.edGroup}><div style={S.edLabel}>回数</div>
 <input style={S.edInput} type=“number” value={ex.reps}
-onChange={e => setEditingRecord(p => ({ …p, exercises: p.exercises.map((x, j) => j === ei ? { …x, reps: parseInt(e.target.value) || 0 } : x) }))} />
+onChange={e => setEditingRecord(p => ({...p, exercises: p.exercises.map((x, j) => j === ei ? {...x, reps: parseInt(e.target.value) || 0 } : x) }))} />
 <div style={S.edUnit}>回</div></div>
 <div style={S.edGroup}><div style={S.edLabel}>セット</div>
 <input style={S.edInput} type=“number” value={ex.sets}
@@ -700,8 +700,8 @@ return (
 <div key={si} style={{ display: “flex”, flexDirection: “column”, alignItems: “center”, gap: 3 }}>
 <div style={{ display: “flex”, alignItems: “center”, gap: 2 }}>
 <button
-style={{ …S.setBtn, …(c ? { background: mc, color: “#000”, borderColor: mc } : {}), …(isCustom ? { borderColor: “#f97316” } : {}) }}
-onClick={() => setEditingRecord(p => ({ …p, exercises: p.exercises.map((x, j) => j !== ei ? x : { …x, done: x.done.map((d, k) => k === si ? !d : d) }) }))}>
+style={{...S.setBtn,...(c ? { background: mc, color: “#000”, borderColor: mc } : {}),...(isCustom ? { borderColor: “#f97316” } : {}) }}
+onClick={() => setEditingRecord(p => ({...p, exercises: p.exercises.map((x, j) => j !== ei ? x : {...x, done: x.done.map((d, k) => k === si ? !d : d) }) }))}>
 {c ? “✓” : si + 1}
 </button>
 <button style={{ background: “none”, border: “none”, color: “#475569”, fontSize: 13, cursor: “pointer”, padding: “0 2px” }}
@@ -717,16 +717,16 @@ onClick={() => setSetModal({ exId: String(ei), si, weight: sd.weight, reps: sd.r
 })}
 {erTab === “add” && Object.entries(grouped).map(([muscle, names]) => (
 <div key={muscle}>
-<div style={{ …S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
+<div style={{...S.muscleLabel, color: MUSCLE_COLORS[muscle] || “#94a3b8” }}>{muscle}</div>
 {names.map(n => {
 const already = editingRecord.exercises.some(e => e.name === n);
 return (
-<button key={n} style={{ …S.exPickRow, background: already ? “#1a2a1a” : “#111827”, borderColor: already ? “#334155” : “#1e293b” }}
+<button key={n} style={{...S.exPickRow, background: already ? “#1a2a1a” : “#111827”, borderColor: already ? “#334155” : “#1e293b” }}
 onClick={() => {
 if (already) return;
 const m = MASTER_EXERCISES.find(e => e.name === n) || { name: n, defaultWeight: 0, defaultReps: 10, defaultSets: 3, muscle: “その他” };
 const newEx = { name: m.name, muscle: m.muscle, weight: m.defaultWeight, reps: m.defaultReps, sets: m.defaultSets, done: Array.from({ length: m.defaultSets }, () => false), setData: Array.from({ length: m.defaultSets }, () => ({ weight: m.defaultWeight, reps: m.defaultReps })) };
-setEditingRecord(p => ({ …p, exercises: […p.exercises, newEx] }));
+setEditingRecord(p => ({...p, exercises: […p.exercises, newEx] }));
 }}>
 <span style={{ color: already ? “#4ade80” : “#cbd5e1” }}>{n}</span>
 <span style={{ color: already ? “#4ade80” : “#334155”, fontSize: 16 }}>{already ? “✓” : “+”}</span>
@@ -742,13 +742,13 @@ setEditingRecord(p => ({ …p, exercises: […p.exercises, newEx] }));
 <div style={{ fontSize: 13, color: MUSCLE_COLORS[setModal.muscle] || “#94a3b8”, fontWeight: 700, marginBottom: 2 }}>{setModal.exName}</div>
 <div style={{ fontSize: 15, fontWeight: 700, color: “#f1f5f9”, marginBottom: 16 }}>セット {setModal.si + 1} の記録を編集</div>
 <div style={{ display: “flex”, gap: 12, justifyContent: “center”, marginBottom: 20 }}>
-<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={setModal.weight} onChange={e => setSetModal(p => ({ …p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
-<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={setModal.reps} onChange={e => setSetModal(p => ({ …p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>重量</div><input style={S.modalInput} type=“number” value={setModal.weight} onChange={e => setSetModal(p => ({...p, weight: parseFloat(e.target.value) || 0 }))} /><div style={S.modalUnit}>kg</div></div>
+<div style={S.modalField}><div style={S.modalLabel}>回数</div><input style={S.modalInput} type=“number” value={setModal.reps} onChange={e => setSetModal(p => ({...p, reps: parseInt(e.target.value) || 0 }))} /><div style={S.modalUnit}>回</div></div>
 </div>
 <div style={{ display: “flex”, gap: 8 }}>
-<button style={{ …S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setSetModal(null)}>キャンセル</button>
-<button style={{ …S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => {
-setEditingRecord(p => ({ …p, exercises: p.exercises.map((x, j) => j !== setModal.ei ? x : { …x, setData: x.setData.map((sd, k) => k === setModal.si ? { weight: setModal.weight, reps: setModal.reps } : sd) }) }));
+<button style={{...S.modalBtn, background: “#1e293b”, color: “#94a3b8”, flex: 1 }} onClick={() => setSetModal(null)}>キャンセル</button>
+<button style={{...S.modalBtn, background: “#f97316”, color: “#000”, flex: 1, fontWeight: 800 }} onClick={() => {
+setEditingRecord(p => ({...p, exercises: p.exercises.map((x, j) => j !== setModal.ei ? x : {...x, setData: x.setData.map((sd, k) => k === setModal.si ? { weight: setModal.weight, reps: setModal.reps } : sd) }) }));
 setSetModal(null);
 }}>保存</button>
 </div>
