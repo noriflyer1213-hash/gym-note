@@ -200,13 +200,25 @@ export default function GymNote() {
             setCheckedSets(ch => {
               setSetOverrides(ov => {
                 let found = null;
-                for (const ex of exs) {
-                  for (let i = 0; i < ex.sets; i++) {
-                    if (!(ex.id === p.completedExId && i === p.completedSi) && !ch[`${ex.id}-${i}`]) {
-                      found = { ex, si: i }; break;
+                // まず同じ種目の次のセットを探す
+                const sameEx = exs.find(e => e.id === p.completedExId);
+                if (sameEx) {
+                  for (let i = p.completedSi + 1; i < sameEx.sets; i++) {
+                    if (!ch[`${sameEx.id}-${i}`]) {
+                      found = { ex: sameEx, si: i }; break;
                     }
                   }
-                  if (found) break;
+                }
+                // 同じ種目に次のセットがなければ次の種目の未完了セットを探す
+                if (!found) {
+                  for (const ex of exs) {
+                    for (let i = 0; i < ex.sets; i++) {
+                      if (!(ex.id === p.completedExId && i === p.completedSi) && !ch[`${ex.id}-${i}`]) {
+                        found = { ex, si: i }; break;
+                      }
+                    }
+                    if (found) break;
+                  }
                 }
                 if (found) {
                   const o = ov[`${found.ex.id}-${found.si}`];
