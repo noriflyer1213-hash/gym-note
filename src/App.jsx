@@ -43,69 +43,50 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 function useTouchSort(items, setItems) {
   const dragIdx = useRef(null);
-  const hoverIdx = useRef(null);
   const itemRefs = useRef([]);
-  const scrollRef = useRef(null);
+  const onTouchStart = (i) => () => { dragIdx.current = i; };
+  const scrollContainerRef = useRef(null);
   const autoScrollRef = useRef(null);
-  const [dragging, setDragging] = useState(null); // {from, to}
-
-  const stopAutoScroll = () => {
-    if (autoScrollRef.current) { clearInterval(autoScrollRef.current); autoScrollRef.current = null; }
-  };
-
-  const onTouchStart = (i) => () => {
-    dragIdx.current = i;
-    hoverIdx.current = i;
-    setDragging({ from: i, to: i });
-  };
 
   const onTouchMove = (e) => {
     if (dragIdx.current === null) return;
     e.preventDefault();
     const touch = e.touches[0];
 
-    // オートスクロール
-    stopAutoScroll();
-    const scrollEl = scrollRef.current;
+    // 自動スクロール
+    const scrollEl = scrollContainerRef.current;
     if (scrollEl) {
       const rect = scrollEl.getBoundingClientRect();
-      const ZONE = 60;
-      if (touch.clientY < rect.top + ZONE) {
+      const threshold = 80;
+      clearInterval(autoScrollRef.current);
+      if (touch.clientY < rect.top + threshold) {
         autoScrollRef.current = setInterval(() => { scrollEl.scrollTop -= 8; }, 16);
-      } else if (touch.clientY > rect.bottom - ZONE) {
+      } else if (touch.clientY > rect.bottom - threshold) {
         autoScrollRef.current = setInterval(() => { scrollEl.scrollTop += 8; }, 16);
       }
     }
 
-    // ホバー検出
     for (let j = 0; j < itemRefs.current.length; j++) {
       const el = itemRefs.current[j];
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       if (touch.clientY >= rect.top && touch.clientY <= rect.bottom && j !== dragIdx.current) {
-        if (hoverIdx.current !== j) {
-          hoverIdx.current = j;
-          setDragging(p => p ? { ...p, to: j } : null);
-          // 実際に並び替え
-          const arr = [...items];
-          const [r] = arr.splice(dragIdx.current, 1);
-          arr.splice(j, 0, r);
-          dragIdx.current = j;
-          setItems(arr);
-        }
+        const arr = [...items];
+        const [r] = arr.splice(dragIdx.current, 1);
+        arr.splice(j, 0, r);
+        dragIdx.current = j;
+        setItems(arr);
         break;
       }
     }
   };
 
-  const onTouchEnd = () => {
-    stopAutoScroll();
+  const onTouchEndWithScroll = () => {
+    clearInterval(autoScrollRef.current);
     dragIdx.current = null;
-    hoverIdx.current = null;
-    setDragging(null);
   };
-
-  return { itemRefs, scrollRef, onTouchStart, onTouchMove, onTouchEnd, dragging, dragIdx };
+  const onTouchEnd = () => { dragIdx.current = null; };
+  return { itemRefs, onTouchStart, onTouchMove, onTouchEnd };
 }
 
 export default function GymNote() {
@@ -283,8 +264,28 @@ export default function GymNote() {
     const key = `${exId}-${si}`;
     const wasDone = !!checkedSets[key];
     setCheckedSets(p => ({ ...p, [key]: !wasDone }));
-    if (!wasDone) { const ex = exercises.find(e => e.id === exId); if (ex && ex.rest > 0) startRest(ex.rest, ex.name, exId, si); }
-    else stopRest();
+    if (!wasDone) {
+      const ex = exercises.find(e => e.id === exId);
+      if (ex && ex.rest > 0) startRest(ex.rest, ex.name, exId, si);
+      // 同じ種目の全セット完了後、次の未完了種目へスクロール
+      setTimeout(() => {
+        setCheckedSets(currentChecked => {
+          const allDoneForEx = Array.from({ length: ex.sets }, (_, i) =>
+            i === si ? true : !!currentChecked[`${exId}-${i}`]
+          ).every(Boolean);
+          if (allDoneForEx) {
+            const nextEx = exercises.find(e =>
+              e.id !== exId &&
+              Array.from({ length: e.sets }, (_, i) => !!currentChecked[`${e.id}-${i}`]).some(d => !d)
+            );
+            if (nextEx && cardRefs.current[nextEx.id]) {
+              cardRefs.current[nextEx.id].scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }
+          return currentChecked;
+        });
+      }, 300);
+    } else stopRest();
   };
 
   const updateEx = (exId, field, val) => {
@@ -355,7 +356,9 @@ export default function GymNote() {
   const deleteMenu = (id) => { if (!window.confirm("削除しますか？")) return; saveData(menusRef.current.filter(m => m.id !== id), undefined); };
   const addNewMenu = () => { const nm = { id: genId(), name: "新しいメニュー", exercises: [] }; saveData([...menusRef.current, nm], undefined); setEditingMenu({ ...nm }); setEditorExercises([]); setEdTab("list"); setView("editor"); };
 
-  const workoutSort = useTouchSort(exercises, setExercises);
+  const workoutScrollRef = useRef(null);
+  const workoutSort = useTouchSort(exercises, setExercises, workoutScrollRef);
+  const cardRefs = useRef({});
 
   // 記録の直接編集
   const startEditRecord = (rec) => {
@@ -433,10 +436,7 @@ export default function GymNote() {
           <button style={{ ...S.tab, ...(edTab === "list" ? S.tabActive : {}) }} onClick={() => setEdTab("list")}>種目一覧</button>
           <button style={{ ...S.tab, ...(edTab === "add" ? S.tabActive : {}) }} onClick={() => setEdTab("add")}>種目を追加</button>
         </div>
-        <div style={S.scroll}
-          ref={editorSort.scrollRef}
-          onTouchMove={edTab === "list" ? editorSort.onTouchMove : undefined}
-          onTouchEnd={edTab === "list" ? editorSort.onTouchEnd : undefined}>
+        <div style={S.scroll} onTouchMove={edTab === "list" ? editorSort.onTouchMove : undefined} onTouchEnd={edTab === "list" ? editorSort.onTouchEnd : undefined}>
           {edTab === "list" && (
             <>
               {editorExercises.length === 0 && <div style={S.empty}>「種目を追加」から追加してください。</div>}
@@ -444,11 +444,7 @@ export default function GymNote() {
                 const m = MASTER_EXERCISES.find(e => e.name === name);
                 const mc = MUSCLE_COLORS[m?.muscle] || "#94a3b8";
                 return (
-                  <div key={name+i} ref={el => editorSort.itemRefs.current[i] = el}
-                    style={{...S.exEditRow, borderLeftColor: mc,
-                      opacity: editorSort.dragging && editorSort.dragIdx.current === i ? 0.4 : 1,
-                      background: editorSort.dragging && editorSort.dragging.to === i && editorSort.dragIdx.current !== i ? "#1e3a5f" : "#111827",
-                    }}>
+                  <div key={name + i} ref={el => editorSort.itemRefs.current[i] = el} style={{ ...S.exEditRow, borderLeftColor: mc }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
                       <span style={{ color: "#64748b", fontSize: 22, cursor: "grab", padding: "4px 6px", touchAction: "none" }} onTouchStart={editorSort.onTouchStart(i)}>☰</span>
                       <div>
@@ -558,16 +554,13 @@ export default function GymNote() {
             <button style={S.timerSkip} onClick={stopRest}>スキップ ×</button>
           </div>
         )}
-                  <div style={S.scroll} ref={workoutSort.scrollRef} onTouchMove={workoutSort.onTouchMove} onTouchEnd={workoutSort.onTouchEnd}>
+        <div style={S.scroll} ref={workoutScrollRef}
+          onTouchMove={workoutSort.onTouchMove} onTouchEnd={workoutSort.onTouchEnd}>
           {exercises.map((ex, idx) => {
             const allDone = Array.from({ length: ex.sets }, (_, i) => !!checkedSets[`${ex.id}-${i}`]).every(Boolean) && ex.sets > 0;
             const mc = MUSCLE_COLORS[ex.muscle] || "#94a3b8";
             return (
-          <div key={ex.id} ref={el => workoutSort.itemRefs.current[idx] = el}
-            style={{...S.card, opacity: (allDone || (workoutSort.dragging && workoutSort.dragIdx.current === idx)) ? 0.4 : 1,
-              borderLeftColor: mc,
-              background: workoutSort.dragging && workoutSort.dragging.to === idx && workoutSort.dragIdx.current !== idx ? "#1e3a5f" : "#111827",
-            }}>
+              <div key={ex.id} ref={el => workoutSort.itemRefs.current[idx] = el} style={{ ...S.card, opacity: allDone ? 0.5 : 1, borderLeftColor: mc }}>
                 <div style={S.cardTop}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                     <span style={{ color: "#475569", fontSize: 22, cursor: "grab", marginTop: 2, padding: "2px 4px", touchAction: "none" }} onTouchStart={workoutSort.onTouchStart(idx)}>☰</span>
