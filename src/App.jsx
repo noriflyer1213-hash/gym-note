@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 
 const MASTER_EXERCISES = [
-  { name: "バーベルスクワット", defaultWeight: 60, defaultReps: 10, defaultSets: 3, rest: 180, muscle: "下半身" },
+  { name: "バーベルスクワット", defaultWeight: 55, defaultReps: 10, defaultSets: 3, rest: 180, muscle: "下半身" },
   { name: "レッグプレス", defaultWeight: 108, defaultReps: 10, defaultSets: 3, rest: 180, muscle: "下半身" },
-  { name: "ブルガリアンスクワット", defaultWeight: 20, defaultReps: 10, defaultSets: 3, rest: 120, muscle: "下半身" },
+  { name: "ブルガリアンスクワット", defaultWeight: 20, defaultReps: 10, defaultSets: 3, rest: 90, muscle: "下半身" },
   { name: "バーベルベンチプレス", defaultWeight: 60, defaultReps: 10, defaultSets: 3, rest: 180, muscle: "胸" },
-  { name: "ダンベルベンチプレス", defaultWeight: 20, defaultReps: 10, defaultSets: 3, rest: 150, muscle: "胸" },
-  { name: "懸垂", defaultWeight: 0, defaultReps: 8, defaultSets: 3, rest: 150, muscle: "背中" },
-  { name: "ラットプルダウン", defaultWeight: 62, defaultReps: 10, defaultSets: 3, rest: 120, muscle: "背中" },
-  { name: "ダンベルロウ", defaultWeight: 26, defaultReps: 10, defaultSets: 3, rest: 120, muscle: "背中" },
-  { name: "チェストサポーテッドロウ", defaultWeight: 30, defaultReps: 10, defaultSets: 3, rest: 120, muscle: "背中" },
+  { name: "ダンベルベンチプレス", defaultWeight: 20, defaultReps: 10, defaultSets: 3, rest: 120, muscle: "胸" },
+  { name: "懸垂", defaultWeight: 0, defaultReps: 8, defaultSets: 3, rest: 120, muscle: "背中" },
+  { name: "ラットプルダウン", defaultWeight: 62, defaultReps: 10, defaultSets: 3, rest: 90, muscle: "背中" },
+  { name: "ダンベルロウ", defaultWeight: 26, defaultReps: 10, defaultSets: 3, rest: 90, muscle: "背中" },
+  { name: "チェストサポーテッドロウ", defaultWeight: 30, defaultReps: 10, defaultSets: 3, rest: 90, muscle: "背中" },
   { name: "デッドリフト（ルーマニアン）", defaultWeight: 60, defaultReps: 10, defaultSets: 3, rest: 180, muscle: "背中" },
   { name: "デッドリフト（コンベンション）", defaultWeight: 80, defaultReps: 5, defaultSets: 3, rest: 240, muscle: "背中" },
   { name: "デッドリフト（スモウ）", defaultWeight: 80, defaultReps: 5, defaultSets: 3, rest: 240, muscle: "背中" },
   { name: "バックエクステンション", defaultWeight: 0, defaultReps: 15, defaultSets: 3, rest: 90, muscle: "背中" },
-  { name: "ショルダープレス", defaultWeight: 14, defaultReps: 12, defaultSets: 3, rest: 120, muscle: "肩" },
+  { name: "ショルダープレス", defaultWeight: 14, defaultReps: 12, defaultSets: 3, rest: 90, muscle: "肩" },
   { name: "インクラインサイドレイズ", defaultWeight: 7, defaultReps: 12, defaultSets: 3, rest: 90, muscle: "肩" },
   { name: "インクラインダンベルカール", defaultWeight: 10, defaultReps: 12, defaultSets: 3, rest: 90, muscle: "二頭" },
   { name: "ライイングエクステンション", defaultWeight: 31, defaultReps: 10, defaultSets: 3, rest: 90, muscle: "三頭" },
@@ -122,23 +122,36 @@ export default function GymNote() {
   // バックグラウンド復帰時のタイマー再計算
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible" && startMs) {
-        const s = Math.floor((Date.now() - startMs) / 1000);
-        setElapsedStr(`${Math.floor(s/60)}分${s%60}秒`);
-      }
-      if (document.visibilityState === "visible" && restTimer) {
+      if (document.visibilityState === "visible") {
+        if (startMs) {
+          const s = Math.floor((Date.now() - startMs) / 1000);
+          setElapsedStr(`${Math.floor(s/60)}分${s%60}秒`);
+        }
         setRestTimer(p => {
           if (!p) return null;
           const elapsed = Math.floor((Date.now() - p.resumeAt) / 1000);
           const newRem = Math.max(0, p.remAtPause - elapsed);
           if (newRem <= 0) { clearInterval(restRef.current); return null; }
-          return { ...p, rem: newRem };
+          // インターバルを再起動
+          clearInterval(restRef.current);
+          restRef.current = setInterval(() => {
+            setRestTimer(pp => {
+              if (!pp || pp.rem <= 1) { clearInterval(restRef.current); return null; }
+              const newR = pp.rem - 1;
+              return { ...pp, rem: newR, remAtPause: newR, resumeAt: Date.now() };
+            });
+          }, 1000);
+          return { ...p, rem: newRem, remAtPause: newRem, resumeAt: Date.now() };
         });
+      } else {
+        // バックグラウンドに移るとき一時停止情報を更新
+        setRestTimer(p => p ? { ...p, remAtPause: p.rem, resumeAt: Date.now() } : null);
+        clearInterval(restRef.current);
       }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [startMs, restTimer]);
+  }, [startMs]);
 
   useEffect(() => {
     try {
@@ -850,7 +863,8 @@ const S = {
   finishBtn: { background: "#f97316", border: "none", color: "#000", fontSize: 13, fontWeight: 800, padding: "8px 14px", borderRadius: 10, cursor: "pointer", letterSpacing: 1 },
   progTrack: { height: 3, background: "#1e293b" },
   progBar: { height: 3, background: "linear-gradient(90deg,#f97316,#ef4444)", transition: "width .3s" },
-  timerBox: { background: "#0f2340", borderBottom: "2px solid #1d4ed8", padding: "12px 16px", textAlign: "center" },
+  timerFloat:{position:"sticky",top:57,zIndex:19,background:"#0d1f40",borderBottom:"2px solid #1d4ed8",padding:"8px 16px",display:"flex",alignItems:"center",gap:8},
+  timerFloatNum:{fontSize:26,fontWeight:900,color:"#93c5fd",letterSpacing:2,minWidth:52},
   timerName: { fontSize: 11, color: "#64748b", marginBottom: 4 },
   timerNum: { fontSize: 32, fontWeight: 900, color: "#93c5fd", letterSpacing: 2 },
   timerTrack: { height: 3, background: "#1e3a5f", borderRadius: 2, margin: "8px 0 6px", overflow: "hidden" },
