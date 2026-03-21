@@ -835,7 +835,7 @@ export default function GymNote() {
 }
 
 const S = {
-  app: { fontFamily: "'Noto Sans JP',sans-serif", background: "#080f1a", minHeight: "100vh", color: "#e2e8f0", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column" },
+  app:{fontFamily:"'Noto Sans JP',sans-serif",background:"#080f1a",height:"100dvh",color:"#e2e8f0",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden"},
   homeTop: { padding: "28px 20px 20px", background: "linear-gradient(160deg,#0f1f3d 0%,#080f1a 100%)", borderBottom: "1px solid #1e293b" },
   logo: { display: "flex", alignItems: "center", gap: 8, fontSize: 22 },
   logoText: { fontWeight: 900, letterSpacing: 2, color: "#f8fafc", fontSize: 20 },
