@@ -863,7 +863,7 @@ const S = {
   finishBtn: { background: "#f97316", border: "none", color: "#000", fontSize: 13, fontWeight: 800, padding: "8px 14px", borderRadius: 10, cursor: "pointer", letterSpacing: 1 },
   progTrack: { height: 3, background: "#1e293b" },
   progBar: { height: 3, background: "linear-gradient(90deg,#f97316,#ef4444)", transition: "width .3s" },
-  timerFloat:{position:"fixed",top:57,left:0,right:0,zIndex:50,background:"#0d1f40",borderBottom:"2px solid #1d4ed8",padding:"8px 16px",display:"flex",alignItems:"center",gap:8,maxWidth:480,margin:"0 auto"},
+  timerFloat:{background:"#0d1f40",borderBottom:"2px solid #1d4ed8",padding:"8px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0},
   timerFloatNum:{fontSize:26,fontWeight:900,color:"#93c5fd",letterSpacing:2,minWidth:52},
   timerName: { fontSize: 11, color: "#64748b", marginBottom: 4 },
   timerNum: { fontSize: 32, fontWeight: 900, color: "#93c5fd", letterSpacing: 2 },
