@@ -560,10 +560,14 @@ export default function GymNote() {
         </div>
         <div style={S.progTrack}><div style={{ ...S.progBar, width: `${totalSets > 0 ? doneSets / totalSets * 100 : 0}%` }} /></div>
         {restTimer && (
-          <div style={S.timerBox}>
-            <div style={S.timerName}>{restTimer.name} · レスト中</div>
-            <div style={S.timerNum}>{formatTime(restTimer.rem)}</div>
-            <div style={S.timerTrack}><div style={{ ...S.timerFill, width: `${(1 - restTimer.rem / restTimer.total) * 100}%` }} /></div>
+          <div style={S.timerFloat}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+              <div style={S.timerFloatNum}>{formatTime(restTimer.rem)}</div>
+              <div style={{flex:1}}>
+                <div style={S.timerName}>{restTimer.name} · レスト中</div>
+                <div style={S.timerTrack}><div style={{...S.timerFill,width:`${(1-restTimer.rem/restTimer.total)*100}%`}}/></div>
+              </div>
+            </div>
             <button style={S.timerSkip} onClick={stopRest}>スキップ ×</button>
           </div>
         )}
