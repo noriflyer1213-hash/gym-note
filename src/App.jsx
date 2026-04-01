@@ -102,11 +102,11 @@ export default function GymNote() {
   const [showAddEx, setShowAddEx] = useState(false);
   const [editingMenu, setEditingMenu] = useState(null);
   const [edTab, setEdTab] = useState("list");
+  const [erTab, setErTab] = useState("list"); // ← ここに移動（元はeditRecord view内にあってHooks違反だった）
   const [setModal, setSetModal] = useState(null);
   const [nextSetModal, setNextSetModal] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
-  // 種目管理
-  const [exModal, setExModal] = useState(null); // {mode:"new"|"edit", ex:{...}}
+  const [exModal, setExModal] = useState(null);
 
   const restRef = useRef(null);
   const elapsedRef = useRef(null);
@@ -344,7 +344,6 @@ export default function GymNote() {
     } else {
       const oldName = exModal.originalName;
       const newMaster = masterRef.current.map(e => e.name === oldName ? ex : e);
-      // メニュー内の種目名も更新
       const newMenus = ex.name !== oldName
         ? menusRef.current.map(m => ({ ...m, exercises: m.exercises.map(n => n === oldName ? ex.name : n) }))
         : menusRef.current;
@@ -371,8 +370,11 @@ export default function GymNote() {
   const workoutScrollRef = useRef(null);
   const workoutSort = useTouchSort(exercises, setExercises, workoutScrollRef);
   const cardRefs = useRef({});
-  const startEditRecord = (rec) => { setEditingRecord(JSON.parse(JSON.stringify(rec))); setView("editRecord"); };
+  const startEditRecord = (rec) => { setEditingRecord(JSON.parse(JSON.stringify(rec))); setErTab("list"); setView("editRecord"); };
   const saveEditRecord = () => { saveData(undefined, historyRef.current.map(r => r.id === editingRecord.id ? editingRecord : r), undefined); setSelectedHistory(editingRecord); setView("detail"); };
+
+  const grouped = {};
+  masterExercises.forEach(e => { if (!grouped[e.muscle]) grouped[e.muscle] = []; grouped[e.muscle].push(e); });
 
   // 種目編集モーダル（共通）
   const ExModal = () => {
@@ -429,9 +431,6 @@ export default function GymNote() {
       </div>
     );
   };
-
-  const grouped = {};
-  masterExercises.forEach(e => { if (!grouped[e.muscle]) grouped[e.muscle] = []; grouped[e.muscle].push(e); });
 
   // ── HOME ──
   if (view === "home") return (
@@ -800,7 +799,6 @@ export default function GymNote() {
 
   // ── EDIT RECORD ──
   if (view === "editRecord" && editingRecord) {
-    const [erTab, setErTab] = useState("list");
     return (
       <div style={S.app}>
         {setModal?.isRecordEdit && (
