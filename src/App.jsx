@@ -107,7 +107,29 @@ const S = {
 function ExModal({ exModal, setExModal, onSave }) {
   if (!exModal) return null;
   const ex = exModal.ex;
-  const update = (field, val) => setExModal(p => ({ ...p, ex: { ...p.ex, [field]: val } }));
+  // 文字列として保持するraw値（入力途中の空文字や編集中の値を保持）
+  const raw = exModal.raw || {};
+  const updateStr = (field, val) => setExModal(p => ({ ...p, raw: { ...(p.raw || {}), [field]: val } }));
+  const updateNum = (field, val, isFloat) => {
+    const num = isFloat ? parseFloat(val) : parseInt(val);
+    setExModal(p => ({
+      ...p,
+      raw: { ...(p.raw || {}), [field]: val },
+      ex: { ...p.ex, [field]: isNaN(num) ? p.ex[field] : num },
+    }));
+  };
+  const commitNum = (field, isFloat) => {
+    const val = raw[field];
+    if (val === undefined) return;
+    const num = isFloat ? parseFloat(val) : parseInt(val);
+    setExModal(p => ({
+      ...p,
+      raw: { ...(p.raw || {}), [field]: undefined },
+      ex: { ...p.ex, [field]: isNaN(num) ? p.ex[field] : num },
+    }));
+  };
+  const display = (field) => raw[field] !== undefined ? raw[field] : String(ex[field]);
+
   return (
     <div style={S.modalOverlay} onClick={() => setExModal(null)}>
       <div style={{ ...S.modalBox, width: 320 }} onClick={e => e.stopPropagation()}>
@@ -117,12 +139,12 @@ function ExModal({ exModal, setExModal, onSave }) {
         <div style={{ marginBottom: 10 }}>
           <div style={S.modalLabel}>種目名</div>
           <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
-            value={ex.name} onChange={e => update("name", e.target.value)} placeholder="種目名" />
+            value={ex.name} onChange={e => setExModal(p => ({ ...p, ex: { ...p.ex, name: e.target.value } }))} placeholder="種目名" />
         </div>
         <div style={{ marginBottom: 10 }}>
           <div style={S.modalLabel}>部位</div>
           <select style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
-            value={ex.muscle} onChange={e => update("muscle", e.target.value)}>
+            value={ex.muscle} onChange={e => setExModal(p => ({ ...p, ex: { ...p.ex, muscle: e.target.value } }))}>
             {MUSCLE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
@@ -130,24 +152,32 @@ function ExModal({ exModal, setExModal, onSave }) {
           <div style={{ flex: 1 }}>
             <div style={S.modalLabel}>重量(kg)</div>
             <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-              value={ex.defaultWeight} onChange={e => update("defaultWeight", parseFloat(e.target.value) || 0)} />
+              value={display("defaultWeight")}
+              onChange={e => updateNum("defaultWeight", e.target.value, true)}
+              onBlur={() => commitNum("defaultWeight", true)} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={S.modalLabel}>回数</div>
             <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-              value={ex.defaultReps} onChange={e => update("defaultReps", parseInt(e.target.value) || 0)} />
+              value={display("defaultReps")}
+              onChange={e => updateNum("defaultReps", e.target.value, false)}
+              onBlur={() => commitNum("defaultReps", false)} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <div style={{ flex: 1 }}>
             <div style={S.modalLabel}>セット数</div>
             <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-              value={ex.defaultSets} onChange={e => update("defaultSets", parseInt(e.target.value) || 1)} />
+              value={display("defaultSets")}
+              onChange={e => updateNum("defaultSets", e.target.value, false)}
+              onBlur={() => commitNum("defaultSets", false)} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={S.modalLabel}>REST(秒)</div>
             <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-              value={ex.rest} onChange={e => update("rest", parseInt(e.target.value) || 0)} />
+              value={display("rest")}
+              onChange={e => updateNum("rest", e.target.value, false)}
+              onBlur={() => commitNum("rest", false)} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
