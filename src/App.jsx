@@ -43,6 +43,61 @@ function formatTime(sec) {
 }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
+function ExModal({ exModal, setExModal, onSave }) {
+  if (!exModal) return null;
+  const ex = exModal.ex;
+  const update = (field, val) => setExModal(p => ({ ...p, ex: { ...p.ex, [field]: val } }));
+  return (
+    <div style={S.modalOverlay} onClick={() => setExModal(null)}>
+      <div style={{ ...S.modalBox, width: 320 }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>
+          {exModal.mode === "new" ? "種目を追加" : "種目を編集"}
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <div style={S.modalLabel}>種目名</div>
+          <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
+            value={ex.name} onChange={e => update("name", e.target.value)} placeholder="種目名" />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <div style={S.modalLabel}>部位</div>
+          <select style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
+            value={ex.muscle} onChange={e => update("muscle", e.target.value)}>
+            {MUSCLE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={S.modalLabel}>重量(kg)</div>
+            <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
+              value={ex.defaultWeight} onChange={e => update("defaultWeight", parseFloat(e.target.value) || 0)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={S.modalLabel}>回数</div>
+            <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
+              value={ex.defaultReps} onChange={e => update("defaultReps", parseInt(e.target.value) || 1)} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={S.modalLabel}>セット数</div>
+            <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
+              value={ex.defaultSets} onChange={e => update("defaultSets", parseInt(e.target.value) || 1)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={S.modalLabel}>REST(秒)</div>
+            <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
+              value={ex.rest} onChange={e => update("rest", parseInt(e.target.value) || 0)} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...S.modalBtn, background: "#1e293b", color: "#94a3b8", flex: 1 }} onClick={() => setExModal(null)}>キャンセル</button>
+          <button style={{ ...S.modalBtn, background: "#f97316", color: "#000", flex: 1, fontWeight: 800 }} onClick={onSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function useTouchSort(items, setItems, scrollRef) {
   const dragIdx = useRef(null);
   const itemRefs = useRef([]);
@@ -376,66 +431,12 @@ export default function GymNote() {
   const grouped = {};
   masterExercises.forEach(e => { if (!grouped[e.muscle]) grouped[e.muscle] = []; grouped[e.muscle].push(e); });
 
-  // 種目編集モーダル（共通）
-  const ExModal = () => {
-    if (!exModal) return null;
-    const ex = exModal.ex;
-    const update = (field, val) => setExModal(p => ({ ...p, ex: { ...p.ex, [field]: val } }));
-    return (
-      <div style={S.modalOverlay} onClick={() => setExModal(null)}>
-        <div style={{ ...S.modalBox, width: 320 }} onClick={e => e.stopPropagation()}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>
-            {exModal.mode === "new" ? "種目を追加" : "種目を編集"}
-          </div>
-          <div style={{ marginBottom: 10 }}>
-            <div style={S.modalLabel}>種目名</div>
-            <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
-              value={ex.name} onChange={e => update("name", e.target.value)} placeholder="種目名" />
-          </div>
-          <div style={{ marginBottom: 10 }}>
-            <div style={S.modalLabel}>部位</div>
-            <select style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 10px", marginTop: 4 }}
-              value={ex.muscle} onChange={e => update("muscle", e.target.value)}>
-              {MUSCLE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={S.modalLabel}>重量(kg)</div>
-              <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-                value={ex.defaultWeight} onChange={e => update("defaultWeight", parseFloat(e.target.value) || 0)} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={S.modalLabel}>回数</div>
-              <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-                value={ex.defaultReps} onChange={e => update("defaultReps", parseInt(e.target.value) || 1)} />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <div style={{ flex: 1 }}>
-              <div style={S.modalLabel}>セット数</div>
-              <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-                value={ex.defaultSets} onChange={e => update("defaultSets", parseInt(e.target.value) || 1)} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={S.modalLabel}>REST(秒)</div>
-              <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-                value={ex.rest} onChange={e => update("rest", parseInt(e.target.value) || 0)} />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button style={{ ...S.modalBtn, background: "#1e293b", color: "#94a3b8", flex: 1 }} onClick={() => setExModal(null)}>キャンセル</button>
-            <button style={{ ...S.modalBtn, background: "#f97316", color: "#000", flex: 1, fontWeight: 800 }} onClick={saveExModal}>保存</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+
 
   // ── HOME ──
   if (view === "home") return (
     <div style={S.app}>
-      <ExModal />
+      <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
       <div style={S.homeTop}>
         <div style={S.logo}>🏋️‍♂️ <span style={S.logoText}>GYM NOTE</span></div>
         <div style={S.todayDate}>{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "long" })}</div>
@@ -488,7 +489,7 @@ export default function GymNote() {
   // ── 種目管理 ──
   if (view === "exManager") return (
     <div style={S.app}>
-      <ExModal />
+      <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
       <div style={S.header}>
         <button style={S.backBtn} onClick={() => setView("home")}>←</button>
         <div style={{ flex: 1 }}>
@@ -526,7 +527,7 @@ export default function GymNote() {
   if (view === "editor" && editingMenu) {
     return (
       <div style={S.app}>
-        <ExModal />
+        <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
         <div style={S.header}>
           <button style={S.backBtn} onClick={() => setView("home")}>←</button>
           <div style={{ flex: 1 }}>
@@ -587,7 +588,7 @@ export default function GymNote() {
   if (view === "workout") {
     return (
       <div style={S.app}>
-        <ExModal />
+        <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
         {setModal && !setModal.isRecordEdit && (
           <div style={S.modalOverlay} onClick={() => setSetModal(null)}>
             <div style={S.modalBox} onClick={e => e.stopPropagation()}>
