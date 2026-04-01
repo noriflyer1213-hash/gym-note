@@ -135,7 +135,7 @@ function ExModal({ exModal, setExModal, onSave }) {
           <div style={{ flex: 1 }}>
             <div style={S.modalLabel}>回数</div>
             <input style={{ ...S.modalInput, width: "100%", fontSize: 14, padding: "8px 6px", marginTop: 4 }} type="number"
-              value={ex.defaultReps} onChange={e => update("defaultReps", parseInt(e.target.value) || 1)} />
+              value={ex.defaultReps} onChange={e => update("defaultReps", parseInt(e.target.value) || 0)} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
