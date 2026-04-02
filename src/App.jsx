@@ -43,6 +43,15 @@ function formatTime(sec) {
 }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
+// 任意の日付から月曜始まりの週キー（YYYY-MM-DD形式、月曜日の日付）を返す
+function getMondayKey(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay(); // 0=日, 1=月, ..., 6=土
+  const diff = (day === 0) ? -6 : 1 - day; // 月曜日へのオフセット
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split("T")[0];
+}
+
 const S = {
   app:{fontFamily:"'Noto Sans JP',sans-serif",background:"#080f1a",height:"100dvh",color:"#e2e8f0",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden"},
   homeTop:{padding:"28px 20px 20px",background:"linear-gradient(160deg,#0f1f3d 0%,#080f1a 100%)",borderBottom:"1px solid #1e293b"},
@@ -108,7 +117,6 @@ function ExModal({ exModal, setExModal, onSave }) {
   if (!exModal) return null;
   const ex = exModal.ex;
   const raw = exModal.raw || {};
-  const updateStr = (field, val) => setExModal(p => ({ ...p, raw: { ...(p.raw || {}), [field]: val } }));
   const updateNum = (field, val, isFloat) => {
     const num = isFloat ? parseFloat(val) : parseInt(val);
     setExModal(p => ({
@@ -232,7 +240,7 @@ function useTouchSort(items, setItems, scrollRef) {
 // ── 統計画面 ──
 function StatsView({ history, masterExercises, onBack }) {
   const [chartReady, setChartReady] = useState(false);
-  const [period, setPeriod] = useState("week"); // "week" | "month"
+  const [period, setPeriod] = useState("week");
   const [selectedExercise, setSelectedExercise] = useState("");
   const muscleBarRef = useRef(null);
   const exLineRef = useRef(null);
@@ -248,32 +256,54 @@ function StatsView({ history, masterExercises, onBack }) {
     document.head.appendChild(script);
   }, []);
 
-  // 種目一覧（履歴に登場するもの）
   const exNames = [...new Set(history.flatMap(r => r.exercises.map(e => e.name)))].sort();
   useEffect(() => { if (exNames.length && !selectedExercise) setSelectedExercise(exNames[0]); }, [exNames.length]);
 
-  // 期間ラベル生成
+  // 月曜始まりの週キー生成（直近8週 or 直近12ヶ月）
   const getPeriodKeys = () => {
     const now = new Date();
-    const keys = [];
     if (period === "week") {
+      // 今週の月曜を起点に直近8週
+      const todayMonday = new Date(now);
+      const day = todayMonday.getDay();
+      const diff = (day === 0) ? -6 : 1 - day;
+      todayMonday.setDate(todayMonday.getDate() + diff);
+      todayMonday.setHours(0, 0, 0, 0);
+      const keys = [];
       for (let i = 7; i >= 0; i--) {
-        const d = new Date(now); d.setDate(d.getDate() - i);
+        const d = new Date(todayMonday);
+        d.setDate(d.getDate() - i * 7);
         keys.push(d.toISOString().split("T")[0]);
       }
+      return keys;
     } else {
+      const keys = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
       }
+      return keys;
     }
-    return keys;
+  };
+
+  // 週キーのラベル（月曜〜日曜を「3/30〜4/5」形式で表示）
+  const getWeekLabel = (mondayKey) => {
+    const mon = new Date(mondayKey);
+    const sun = new Date(mondayKey);
+    sun.setDate(sun.getDate() + 6);
+    const fmt = (d) => `${d.getMonth()+1}/${d.getDate()}`;
+    return `${fmt(mon)}〜${fmt(sun)}`;
   };
 
   const periodKeys = getPeriodKeys();
-  const getKey = (dateStr) => period === "week" ? dateStr : dateStr.slice(0, 7);
 
-  // 部位別ボリューム集計（重量×rep×set完了数）
+  // 日付 → 期間キーの変換
+  const getKey = (dateStr) => {
+    if (period === "week") return getMondayKey(dateStr);
+    return dateStr.slice(0, 7);
+  };
+
+  // 部位別ボリューム集計
   const muscleData = {};
   MUSCLE_OPTIONS.forEach(m => { muscleData[m] = {}; periodKeys.forEach(k => { muscleData[m][k] = 0; }); });
   history.forEach(r => {
@@ -303,10 +333,12 @@ function StatsView({ history, masterExercises, onBack }) {
     });
   }
 
-  const labels = periodKeys.map(k => period === "week" ? k.slice(5).replace("-", "/") : k.slice(5) + "月");
+  const labels = periodKeys.map(k =>
+    period === "week" ? getWeekLabel(k) : k.slice(5) + "月"
+  );
   const usedMuscles = MUSCLE_OPTIONS.filter(m => Object.values(muscleData[m] || {}).some(v => v > 0));
 
-  // 部位別グラフ描画
+  // 部位別グラフ
   useEffect(() => {
     if (!chartReady || !muscleBarRef.current) return;
     if (muscleChartRef.current) muscleChartRef.current.destroy();
@@ -327,7 +359,7 @@ function StatsView({ history, masterExercises, onBack }) {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 12 } } },
         scales: {
-          x: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+          x: { stacked: true, ticks: { color: "#64748b", font: { size: 9 }, maxRotation: 45 }, grid: { color: "#1e293b" } },
           y: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
         },
       },
@@ -335,7 +367,7 @@ function StatsView({ history, masterExercises, onBack }) {
     return () => { if (muscleChartRef.current) muscleChartRef.current.destroy(); };
   }, [chartReady, period, history.length]);
 
-  // 種目別グラフ描画
+  // 種目別グラフ
   useEffect(() => {
     if (!chartReady || !exLineRef.current || !selectedExercise) return;
     if (exChartRef.current) exChartRef.current.destroy();
@@ -357,7 +389,7 @@ function StatsView({ history, masterExercises, onBack }) {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 } } } },
         scales: {
-          x: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+          x: { ticks: { color: "#64748b", font: { size: 9 }, maxRotation: 45 }, grid: { color: "#1e293b" } },
           y: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
         },
       },
@@ -699,12 +731,10 @@ export default function GymNote() {
   const grouped = {};
   masterExercises.forEach(e => { if (!grouped[e.muscle]) grouped[e.muscle] = []; grouped[e.muscle].push(e); });
 
-  // ── 統計画面 ──
   if (view === "stats") return (
     <StatsView history={history} masterExercises={masterExercises} onBack={() => setView("home")} />
   );
 
-  // ── HOME ──
   if (view === "home") return (
     <div style={S.app}>
       <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
@@ -758,7 +788,6 @@ export default function GymNote() {
     </div>
   );
 
-  // ── 種目管理 ──
   if (view === "exManager") return (
     <div style={S.app}>
       <ExModal exModal={exModal} setExModal={setExModal} onSave={saveExModal} />
@@ -795,7 +824,6 @@ export default function GymNote() {
     </div>
   );
 
-  // ── EDITOR ──
   if (view === "editor" && editingMenu) {
     return (
       <div style={S.app}>
@@ -856,7 +884,6 @@ export default function GymNote() {
     );
   }
 
-  // ── WORKOUT ──
   if (view === "workout") {
     return (
       <div style={S.app}>
@@ -998,7 +1025,6 @@ export default function GymNote() {
     );
   }
 
-  // ── HISTORY ──
   if (view === "history") return (
     <div style={S.app}>
       <div style={S.header}>
@@ -1021,7 +1047,6 @@ export default function GymNote() {
     </div>
   );
 
-  // ── DETAIL ──
   if (view === "detail" && selectedHistory) {
     const r = selectedHistory;
     return (
@@ -1070,7 +1095,6 @@ export default function GymNote() {
     );
   }
 
-  // ── EDIT RECORD ──
   if (view === "editRecord" && editingRecord) {
     return (
       <div style={S.app}>
