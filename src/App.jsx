@@ -43,13 +43,20 @@ function formatTime(sec) {
 }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
-// 任意の日付から月曜始まりの週キー（YYYY-MM-DD形式、月曜日の日付）を返す
+// ローカル時間基準でYYYY-MM-DDを返す
+function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// 任意の日付文字列(YYYY-MM-DD)から、月曜始まりの週キー(月曜のYYYY-MM-DD)を返す
+// ※ローカル時間基準で処理してUTCズレを防ぐ
 function getMondayKey(dateStr) {
-  const d = new Date(dateStr);
-  const day = d.getDay(); // 0=日, 1=月, ..., 6=土
-  const diff = (day === 0) ? -6 : 1 - day; // 月曜日へのオフセット
+  const [y, m, day] = dateStr.split("-").map(Number);
+  const d = new Date(y, m - 1, day); // ローカル時間で生成
+  const dow = d.getDay(); // 0=日, 1=月, ..., 6=土
+  const diff = (dow === 0) ? -6 : 1 - dow;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
+  return toLocalDateStr(d);
 }
 
 const S = {
@@ -237,7 +244,6 @@ function useTouchSort(items, setItems, scrollRef) {
   return { itemRefs, onTouchStart, onTouchMove, onTouchEnd };
 }
 
-// ── 統計画面 ──
 function StatsView({ history, masterExercises, onBack }) {
   const [chartReady, setChartReady] = useState(false);
   const [period, setPeriod] = useState("week");
@@ -247,7 +253,6 @@ function StatsView({ history, masterExercises, onBack }) {
   const muscleChartRef = useRef(null);
   const exChartRef = useRef(null);
 
-  // Chart.js 動的ロード
   useEffect(() => {
     if (window.Chart) { setChartReady(true); return; }
     const script = document.createElement("script");
@@ -259,21 +264,17 @@ function StatsView({ history, masterExercises, onBack }) {
   const exNames = [...new Set(history.flatMap(r => r.exercises.map(e => e.name)))].sort();
   useEffect(() => { if (exNames.length && !selectedExercise) setSelectedExercise(exNames[0]); }, [exNames.length]);
 
-  // 月曜始まりの週キー生成（直近8週 or 直近12ヶ月）
   const getPeriodKeys = () => {
     const now = new Date();
     if (period === "week") {
-      // 今週の月曜を起点に直近8週
-      const todayMonday = new Date(now);
-      const day = todayMonday.getDay();
-      const diff = (day === 0) ? -6 : 1 - day;
-      todayMonday.setDate(todayMonday.getDate() + diff);
-      todayMonday.setHours(0, 0, 0, 0);
+      // 今週の月曜をローカル時間で求める
+      const dow = now.getDay();
+      const diff = (dow === 0) ? -6 : 1 - dow;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
       const keys = [];
       for (let i = 7; i >= 0; i--) {
-        const d = new Date(todayMonday);
-        d.setDate(d.getDate() - i * 7);
-        keys.push(d.toISOString().split("T")[0]);
+        const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - i * 7);
+        keys.push(toLocalDateStr(d));
       }
       return keys;
     } else {
@@ -286,24 +287,16 @@ function StatsView({ history, masterExercises, onBack }) {
     }
   };
 
-  // 週キーのラベル（月曜〜日曜を「3/30〜4/5」形式で表示）
   const getWeekLabel = (mondayKey) => {
-    const mon = new Date(mondayKey);
-    const sun = new Date(mondayKey);
-    sun.setDate(sun.getDate() + 6);
-    const fmt = (d) => `${d.getMonth()+1}/${d.getDate()}`;
-    return `${fmt(mon)}〜${fmt(sun)}`;
+    const [y, m, d] = mondayKey.split("-").map(Number);
+    const mon = new Date(y, m - 1, d);
+    const sun = new Date(y, m - 1, d + 6);
+    return `${mon.getMonth()+1}/${mon.getDate()}〜${sun.getMonth()+1}/${sun.getDate()}`;
   };
 
   const periodKeys = getPeriodKeys();
+  const getKey = (dateStr) => period === "week" ? getMondayKey(dateStr) : dateStr.slice(0, 7);
 
-  // 日付 → 期間キーの変換
-  const getKey = (dateStr) => {
-    if (period === "week") return getMondayKey(dateStr);
-    return dateStr.slice(0, 7);
-  };
-
-  // 部位別ボリューム集計
   const muscleData = {};
   MUSCLE_OPTIONS.forEach(m => { muscleData[m] = {}; periodKeys.forEach(k => { muscleData[m][k] = 0; }); });
   history.forEach(r => {
@@ -318,7 +311,6 @@ function StatsView({ history, masterExercises, onBack }) {
     });
   });
 
-  // 種目別ボリューム集計
   const exData = {};
   periodKeys.forEach(k => { exData[k] = 0; });
   if (selectedExercise) {
@@ -333,12 +325,9 @@ function StatsView({ history, masterExercises, onBack }) {
     });
   }
 
-  const labels = periodKeys.map(k =>
-    period === "week" ? getWeekLabel(k) : k.slice(5) + "月"
-  );
+  const labels = periodKeys.map(k => period === "week" ? getWeekLabel(k) : k.slice(5) + "月");
   const usedMuscles = MUSCLE_OPTIONS.filter(m => Object.values(muscleData[m] || {}).some(v => v > 0));
 
-  // 部位別グラフ
   useEffect(() => {
     if (!chartReady || !muscleBarRef.current) return;
     if (muscleChartRef.current) muscleChartRef.current.destroy();
@@ -367,7 +356,6 @@ function StatsView({ history, masterExercises, onBack }) {
     return () => { if (muscleChartRef.current) muscleChartRef.current.destroy(); };
   }, [chartReady, period, history.length]);
 
-  // 種目別グラフ
   useEffect(() => {
     if (!chartReady || !exLineRef.current || !selectedExercise) return;
     if (exChartRef.current) exChartRef.current.destroy();
