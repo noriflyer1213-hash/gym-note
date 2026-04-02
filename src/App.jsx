@@ -107,7 +107,6 @@ const S = {
 function ExModal({ exModal, setExModal, onSave }) {
   if (!exModal) return null;
   const ex = exModal.ex;
-  // 文字列として保持するraw値（入力途中の空文字や編集中の値を保持）
   const raw = exModal.raw || {};
   const updateStr = (field, val) => setExModal(p => ({ ...p, raw: { ...(p.raw || {}), [field]: val } }));
   const updateNum = (field, val, isFloat) => {
@@ -230,6 +229,186 @@ function useTouchSort(items, setItems, scrollRef) {
   return { itemRefs, onTouchStart, onTouchMove, onTouchEnd };
 }
 
+// ── 統計画面 ──
+function StatsView({ history, masterExercises, onBack }) {
+  const [chartReady, setChartReady] = useState(false);
+  const [period, setPeriod] = useState("week"); // "week" | "month"
+  const [selectedExercise, setSelectedExercise] = useState("");
+  const muscleBarRef = useRef(null);
+  const exLineRef = useRef(null);
+  const muscleChartRef = useRef(null);
+  const exChartRef = useRef(null);
+
+  // Chart.js 動的ロード
+  useEffect(() => {
+    if (window.Chart) { setChartReady(true); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
+    script.onload = () => setChartReady(true);
+    document.head.appendChild(script);
+  }, []);
+
+  // 種目一覧（履歴に登場するもの）
+  const exNames = [...new Set(history.flatMap(r => r.exercises.map(e => e.name)))].sort();
+  useEffect(() => { if (exNames.length && !selectedExercise) setSelectedExercise(exNames[0]); }, [exNames.length]);
+
+  // 期間ラベル生成
+  const getPeriodKeys = () => {
+    const now = new Date();
+    const keys = [];
+    if (period === "week") {
+      for (let i = 7; i >= 0; i--) {
+        const d = new Date(now); d.setDate(d.getDate() - i);
+        keys.push(d.toISOString().split("T")[0]);
+      }
+    } else {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+      }
+    }
+    return keys;
+  };
+
+  const periodKeys = getPeriodKeys();
+  const getKey = (dateStr) => period === "week" ? dateStr : dateStr.slice(0, 7);
+
+  // 部位別ボリューム集計（重量×rep×set完了数）
+  const muscleData = {};
+  MUSCLE_OPTIONS.forEach(m => { muscleData[m] = {}; periodKeys.forEach(k => { muscleData[m][k] = 0; }); });
+  history.forEach(r => {
+    const key = getKey(r.date);
+    if (!periodKeys.includes(key)) return;
+    r.exercises.forEach(ex => {
+      const m = ex.muscle || "その他";
+      if (!muscleData[m]) return;
+      ex.setData?.forEach((sd, i) => {
+        if (ex.done?.[i]) muscleData[m][key] += (sd.weight || 0) * (sd.reps || 0);
+      });
+    });
+  });
+
+  // 種目別ボリューム集計
+  const exData = {};
+  periodKeys.forEach(k => { exData[k] = 0; });
+  if (selectedExercise) {
+    history.forEach(r => {
+      const key = getKey(r.date);
+      if (!periodKeys.includes(key)) return;
+      r.exercises.filter(e => e.name === selectedExercise).forEach(ex => {
+        ex.setData?.forEach((sd, i) => {
+          if (ex.done?.[i]) exData[key] += (sd.weight || 0) * (sd.reps || 0);
+        });
+      });
+    });
+  }
+
+  const labels = periodKeys.map(k => period === "week" ? k.slice(5).replace("-", "/") : k.slice(5) + "月");
+  const usedMuscles = MUSCLE_OPTIONS.filter(m => Object.values(muscleData[m] || {}).some(v => v > 0));
+
+  // 部位別グラフ描画
+  useEffect(() => {
+    if (!chartReady || !muscleBarRef.current) return;
+    if (muscleChartRef.current) muscleChartRef.current.destroy();
+    muscleChartRef.current = new window.Chart(muscleBarRef.current, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: usedMuscles.map(m => ({
+          label: m,
+          data: periodKeys.map(k => muscleData[m][k] || 0),
+          backgroundColor: MUSCLE_COLORS[m] + "cc",
+          borderColor: MUSCLE_COLORS[m],
+          borderWidth: 1,
+          borderRadius: 3,
+        })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 12 } } },
+        scales: {
+          x: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+          y: { stacked: true, ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+        },
+      },
+    });
+    return () => { if (muscleChartRef.current) muscleChartRef.current.destroy(); };
+  }, [chartReady, period, history.length]);
+
+  // 種目別グラフ描画
+  useEffect(() => {
+    if (!chartReady || !exLineRef.current || !selectedExercise) return;
+    if (exChartRef.current) exChartRef.current.destroy();
+    const color = MUSCLE_COLORS[masterExercises.find(e => e.name === selectedExercise)?.muscle] || "#f97316";
+    exChartRef.current = new window.Chart(exLineRef.current, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: selectedExercise + " ボリューム(kg×回)",
+          data: periodKeys.map(k => exData[k] || 0),
+          borderColor: color,
+          backgroundColor: color + "22",
+          pointBackgroundColor: color,
+          tension: 0.3, fill: true, borderWidth: 2, pointRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+          y: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+        },
+      },
+    });
+    return () => { if (exChartRef.current) exChartRef.current.destroy(); };
+  }, [chartReady, period, selectedExercise, history.length]);
+
+  return (
+    <div style={S.app}>
+      <div style={S.header}>
+        <button style={S.backBtn} onClick={onBack}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={S.headerTitle}>トレーニング統計</div>
+          <div style={S.headerSub}>{history.length}件のログ</div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={{ ...S.finishBtn, background: period === "week" ? "#f97316" : "#1e293b", color: period === "week" ? "#000" : "#94a3b8" }} onClick={() => setPeriod("week")}>週</button>
+          <button style={{ ...S.finishBtn, background: period === "month" ? "#f97316" : "#1e293b", color: period === "month" ? "#000" : "#94a3b8" }} onClick={() => setPeriod("month")}>月</button>
+        </div>
+      </div>
+      <div style={S.scroll}>
+        <div style={{ padding: "16px 16px 8px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: 1, marginBottom: 10 }}>部位別ボリューム</div>
+          {!chartReady && <div style={{ color: "#475569", fontSize: 13, padding: "20px 0" }}>グラフ読み込み中...</div>}
+          <div style={{ height: 220, display: chartReady ? "block" : "none" }}>
+            <canvas ref={muscleBarRef} />
+          </div>
+        </div>
+        <div style={{ padding: "16px 16px 8px", borderTop: "1px solid #1e293b", marginTop: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: 1, marginBottom: 10 }}>種目別ボリューム推移</div>
+          <select
+            style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", fontSize: 13, padding: "8px 10px", marginBottom: 12, outline: "none" }}
+            value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
+            {exNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          {!chartReady && <div style={{ color: "#475569", fontSize: 13, padding: "20px 0" }}>グラフ読み込み中...</div>}
+          <div style={{ height: 200, display: chartReady ? "block" : "none" }}>
+            <canvas ref={exLineRef} />
+          </div>
+        </div>
+        {history.length === 0 && (
+          <div style={{ padding: "40px 16px", textAlign: "center", color: "#475569", fontSize: 14 }}>
+            トレーニング記録がありません
+          </div>
+        )}
+        <div style={{ height: 40 }} />
+      </div>
+    </div>
+  );
+}
+
 export default function GymNote() {
   const [view, setView] = useState("home");
   const [masterExercises, setMasterExercises] = useState(DEFAULT_EXERCISES);
@@ -248,7 +427,7 @@ export default function GymNote() {
   const [showAddEx, setShowAddEx] = useState(false);
   const [editingMenu, setEditingMenu] = useState(null);
   const [edTab, setEdTab] = useState("list");
-  const [erTab, setErTab] = useState("list"); // ← ここに移動（元はeditRecord view内にあってHooks違反だった）
+  const [erTab, setErTab] = useState("list");
   const [setModal, setSetModal] = useState(null);
   const [nextSetModal, setNextSetModal] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -479,7 +658,6 @@ export default function GymNote() {
   const totalSets = exercises.reduce((s, e) => s + e.sets, 0);
   const doneSets = Object.values(checkedSets).filter(Boolean).length;
 
-  // 種目管理
   const saveExModal = () => {
     if (!exModal) return;
     const ex = exModal.ex;
@@ -503,7 +681,6 @@ export default function GymNote() {
     saveData(undefined, undefined, masterRef.current.filter(e => e.name !== name));
   };
 
-  // Editor
   const [editorExercises, setEditorExercises] = useState([]);
   useEffect(() => { if (editingMenu) setEditorExercises([...editingMenu.exercises]); }, [editingMenu?.id]);
   const editorSort = useTouchSort(editorExercises, setEditorExercises);
@@ -522,7 +699,10 @@ export default function GymNote() {
   const grouped = {};
   masterExercises.forEach(e => { if (!grouped[e.muscle]) grouped[e.muscle] = []; grouped[e.muscle].push(e); });
 
-
+  // ── 統計画面 ──
+  if (view === "stats") return (
+    <StatsView history={history} masterExercises={masterExercises} onBack={() => setView("home")} />
+  );
 
   // ── HOME ──
   if (view === "home") return (
@@ -570,7 +750,8 @@ export default function GymNote() {
           {history.length > 4 && <button style={S.moreBtn} onClick={() => setView("history")}>すべての履歴 →</button>}
         </div>
         <div style={S.section}>
-          <button style={{ ...S.buildCard, marginTop: 0 }} onClick={() => setView("exManager")}>⚙️ 種目を管理する</button>
+          <button style={{ ...S.buildCard, marginTop: 0 }} onClick={() => setView("stats")}>📊 トレーニング統計を見る</button>
+          <button style={{ ...S.buildCard, marginTop: 8 }} onClick={() => setView("exManager")}>⚙️ 種目を管理する</button>
         </div>
         <div style={{ height: 20 }} />
       </div>
